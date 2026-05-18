@@ -776,7 +776,7 @@ func (r *IssueRepo) FindSchedulableIssues(ctx context.Context) ([]*Issue, error)
 | Worker 消费 | `in_progress` | Active（已 dequeue） | 不在 Redis 队列中 |
 | 人工暂停 | `in_progress → paused` | Active（Worker 心跳等待） | Docker 容器冻结 |
 | 人工恢复 | `paused → in_progress` | Active（Worker 心跳跳出） | Docker 容器解冻 |
-| 人工停止 | `in_progress/paused → backlog` | 终止（goroutine 退出） | 容器销毁 |
+| 人工停止 | `in_progress/paused → backlog` | 终止（goroutine 退出） | worktree 保留，opencode 进程终止 |
 | opencode 成功 | `in_progress → in_review` | Completed | 任务返回 nil |
 | opencode 失败 | `in_progress → todo` | Failed → 重新入队（retry_count+1） | 保留沙箱 |
 | 重试耗尽 | `todo → backlog` | Archived（死信队列） | 销毁沙箱 |
@@ -1511,6 +1511,7 @@ CREATE TABLE projects (
     git_auth_type ENUM('http','ssh') DEFAULT 'http',                         -- 授权方式
     git_auth_credential TEXT,                                                   -- HTTP:Token / SSH:私钥 (RSA 4096 > 1024 字符)
     runtime_data_dir VARCHAR(512),                                              -- 项目运行时数据目录（空=未初始化，由 initProjectRuntime 填充）
+    sandbox_container_id VARCHAR(64),                                           -- Docker 容器 ID（项目级常驻容器）
     created_by BIGINT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (org_id) REFERENCES organizations(id),
@@ -1529,7 +1530,8 @@ CREATE TABLE issues (
     source_group_id BIGINT,             -- 来源群聊
     source_message_id BIGINT,           -- 来源消息
     pr_url VARCHAR(512),                -- 关联 PR 链接（由 Worker 在创建 PR 后回写）
-    sandbox_container_id VARCHAR(64),   -- Docker 容器 ID（首次执行时写入，重试时由此复用沙箱，done 后清空）
+    sandbox_container_id VARCHAR(64),   -- Docker 容器 ID（项目级常驻，projects 表也有此字段）
+    -- 注：容器为项目级（1 Project = 1 Container），Issues 通过 project_id → projects.sandbox_container_id 获取
     created_by BIGINT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -2720,12 +2722,12 @@ sequenceDiagram
 | `todo` | 人工从 backlog 转为 todo | `in_progress` | 系统自动调度（按优先级+排队顺序） |
 | `in_progress` | 系统自动 | `in_review` | opencode 检查通过 + PR 创建成功 |
 | `in_progress` | 系统自动 | `paused` | 人工点击 [暂停] |
-| `in_progress` | 系统自动 | `backlog` | 人工点击 [停止]（终止容器 + 销毁沙箱） |
-| `paused` | 人工暂停 | `in_progress` | 人工点击 [恢复]（解冻沙箱，从断点继续） |
-| `paused` | 人工暂停 | `backlog` | 人工点击 [停止]（终止容器 + 销毁沙箱） |
-| `in_progress` | 系统自动 / 人工恢复 | `todo` | opencode 检查失败 → 保留沙箱 → 等待人工提示词 |
-| `in_review` | opencode 检查通过后 | `done` | GitHub Webhook 通知 PR 已 merge → 销毁沙箱 |
-| `in_review` | opencode 检查通过后 | `todo` | PR 被拒绝 → 人工追加提示词 → Eino 优化 → 复用沙箱重新执行 |
+| `in_progress` | 系统自动 | `backlog` | 人工点击 [停止]（终止 opencode 进程，worktree 保留） |
+| `paused` | 人工暂停 | `in_progress` | 人工点击 [恢复]（SIGCONT 恢复 opencode 进程） |
+| `paused` | 人工暂停 | `backlog` | 人工点击 [停止]（终止 opencode 进程，worktree 保留） |
+| `in_progress` | 系统自动 / 人工恢复 | `todo` | opencode 检查失败 → 保留 worktree → 等待人工提示词 |
+| `in_review` | opencode 检查通过后 | `done` | GitHub Webhook 通知 PR 已 merge → git worktree remove |
+| `in_review` | opencode 检查通过后 | `todo` | PR 被拒绝 → 人工追加提示词 → Eino 优化 → 复用 worktree 重新执行 |
 
 **人工提示词介入机制**：
 
@@ -2758,9 +2760,9 @@ Issue 的时间线面板允许自然人在任意阶段追加提示词，直接�
 - `POST /api/orgs/:org_id/projects/:project_id/issues/:issue_id/prompt` → 写入 `issue_timeline`（event_type=human_prompt）
 - Issue 服务收到人工提示词后调用 `prompt_optimizer.Enhance()`（Eino 优化改写）
 - 优化后的提示词写入时间线，触发 Issue 重新进入 in_progress
-- Worker 检测到已有沙箱容器（`issue_id → container_id` 映射），复用旧沙箱继续执行
+- Worker 检测到已有 worktree（`project_id → 容器 → /workspace/issue-{id}`），在 worktree 内继续执行
 - opencode 基于上次工作区状态 + 优化提示词继续编码
-- Issue done 后销毁沙箱，释放资源
+- Issue done 后清理 worktree（`git worktree remove`），容器常驻不销毁
 - opencode 重新执行时保留之前的 `issue_timeline` 日志记录
 
 **GitHub Webhook 处理器**：

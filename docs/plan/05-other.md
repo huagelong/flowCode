@@ -530,7 +530,7 @@ anserflow worker
   # 仅启动 Asynq Worker，不启动 HTTP 服务
   # Worker 通过统一 RuntimeClient 接口与工具（opencode/hermes）双向通讯：
   #   local:   启动本地 opencode/hermes 子进程，通过 stdin/stdout 双向流通讯
-  #   sandbox: 启动 Docker 容器，通过 ContainerAttach 双向流通讯
+  #   sandbox: 项目常驻容器，docker exec 执行 opencode，git worktree 隔离 Issue
   #   auto:    优先沙箱（检测 Docker 可用），不可用时回退本地
   # 本地和沙箱使用同一套通讯协议，方便本地开发调试
 
@@ -731,7 +731,7 @@ anserflow/
 │   │   ├── worker.go           #     Worker 服务（Asynq Server 启动）
 │   │   ├── handlers.go         #     任务处理器（issue:execute 等）
 │   │   ├── client.go           #     RuntimeClient 接口 + LocalClient 实现
-│   │   └── sandbox.go          #     SandboxClient 实现（Docker ContainerAttach）
+│   │   └── sandbox.go          #     SandboxClient 实现（docker exec + git worktree）
 │   ├── handler/                #   Gin Handler（API 路由）
 │   ├── service/                #   业务服务层
 │   ├── model/                  #   GORM Model
@@ -851,22 +851,24 @@ Worker 通过统一 `RuntimeClient` 接口与运行时工具（opencode、hermes
 │  ┌──────────────┐    ┌──────────────────┐                │
 │  │ LocalClient   │    │ SandboxClient    │                │
 │  │               │    │                  │                │
-│  │ exec.Command  │    │ docker           │                │
-│  │  ("opencode") │    │  ContainerAttach │                │
+│  │ exec.Command  │    │ docker exec      │                │
+│  │  ("opencode") │    │  (项目常驻容器)    │                │
 │  │               │    │                  │                │
-│  │ stdin ────────│─── │ ──► 容器 stdin   │                │
-│  │       ◄───────│─── │ ──  容器 stdout  │                │
+│  │ stdin ────────│─── │ ──► 容器 stdout  │                │
+│  │       ◄───────│─── │ ──   捕获        │                │
 │  │        stdout │    │                  │                │
 │  └──────────────┘    └──────────────────┘                │
 │        │                      │                           │
 │        ▼                      ▼                           │
-│  ┌──────────────┐    ┌──────────────────┐                │
-│  │ 本地 opencode │    │ Docker 沙箱       │                │
-│  │ / hermes     │    │ ┌──────────────┐ │                │
-│  │ 子进程       │    │ │ opencode run │ │                │
-│  │              │    │ │ / hermes     │ │                │
-│  └──────────────┘    │ └──────────────┘ │                │
-│                      └──────────────────┘                │
+│  ┌──────────────┐    ┌──────────────────────────┐        │
+│  │ 本地 opencode │    │ 项目常驻容器               │        │
+│  │ / hermes     │    │ ┌──────────────────────┐ │        │
+│  │ 子进程       │    │ │ /workspace/           │ │        │
+│  │              │    │ │   main/ (基准)        │ │        │
+│  └──────────────┘    │ │   issue-42/ (worktree)│ │        │
+│                      │ │ opencode run         │ │        │
+│                      │ └──────────────────────┘ │        │
+│                      └──────────────────────────┘        │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -887,13 +889,14 @@ Worker 通过统一 `RuntimeClient` 接口与运行时工具（opencode、hermes
 
 | | LocalClient | SandboxClient |
 |------|-------------|-------------|
-| 启动方式 | `exec.Command("opencode", "run")` | Docker ContainerCreate + Start |
-| 通讯方式 | 子进程 stdin/stdout pipe | ContainerAttach stdin/stdout |
+| 启动方式 | `exec.Command("opencode", "run")` | 项目容器常驻，`docker exec` 执行 opencode |
+| 通讯方式 | 子进程 stdin/stdout pipe | docker exec stdout 捕获 |
+| 代码隔离 | 无（直接修改本地 repo） | git worktree 物理隔离，每 Issue 独立目录 |
 | 隔离性 | 无（共享宿主机文件系统） | 强隔离（容器沙箱） |
-| 启动速度 | 毫秒级 | 秒级（容器启动） |
+| 启动速度 | 毫秒级 | 项目首次启动秒级，后续 exec 零开销 |
 | 依赖 | 本地需安装 opencode/hermes CLI | 仅需 Docker |
 | 适用场景 | 本地开发调试 | 生产环境 |
-| 调试便利 | 可直接查看子进程输出、attach 调试器 | 需 docker logs / exec 进入 |
+| 调试便利 | 可直接查看子进程输出、attach 调试器 | 需 docker exec / docker logs 进入 |
 
 **本地模式开发调试流程**：
 

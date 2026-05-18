@@ -1988,172 +1988,174 @@ func estimateCost(providerKey string, promptTokens, completionTokens int64) floa
 
 ## 七、Docker 沙箱方案
 
-### 7.1 执行流程
+### 7.0 容器与代码隔离策略
+
+本项目采用 **一个项目一个常驻容器 + 一个 Issue 一个 git worktree** 的隔离模型。
+
+**设计决策**：
+
+| 维度 | 旧方案（1 Issue = 1 容器） | 新方案（1 Project = 1 容器 + worktree） |
+|------|---------------------------|----------------------------------------|
+| 容器粒度 | 每个 Issue 创建新容器 | 每个 Project 一个常驻容器 |
+| 代码隔离 | 共享 Named Volume，多 Issue 踩踏 | git worktree 物理隔离，零干扰 |
+| 容器启动 | 每个 Issue 启动一次（秒级） | 项目启动一次，后续 exec 零开销 |
+| 资源占用 | N 个容器 × 512MB | 1 个容器 × 1GB（共享） |
+| 崩溃影响 | 单 Issue 容器死不影响别的 | 容器死 → 全部 Issue 受影响 |
+| 崩溃恢复 | 需要逐个容器恢复 | 仅恢复一个容器 + 重建 worktree |
+| 磁盘占用 | 1 份代码（Volume） | N+1 份 worktree（共享 .git/objects） |
+
+**架构图**：
 
 ```
-┌──────────────────────────────────────┐
-│  Asynq Worker                        │
-│  ┌────────────────────────────────┐  │
-│  │  Step 1: 准备                  │  │
-│  │  ├── 读取 Issue 上下文         │  │
-│  │  ├── 加载 Agent 配置           │  │
-│  │  └── 加载绑定的 Skills         │  │
-│  │                                │  │
-│  │  Step 2: 创建沙箱容器          │  │
-│  │  ├── Image: anserflow/sandbox  │  │
-│  │  ├── Memory: 512MB             │  │
-│  │  ├── CPU: 2 cores              │  │
-│  │  ├── NamedVol: workspace-{projectID}:/workspace  │  │
-│  │  │   (代码持久化，容器销毁后不丢失，避免重复 clone)│  │
-│  │  ├── BindMount: project-runtime→home (rw)│  │
-│  │  │   /var/lib/.../projects/{id}/runtime/ → /home/sandbox/.opencode│  │
-│  │  │   (项目级运行时数据：Skills + 配置 + 插件，读写)│  │
-│  │  └── AutoRemove: false (保障重启后可恢复) │  │
-│  │                                │  │
-│  │  Step 3: 注入运行时配置         │  │
-│  │  ├── 读取 Agent runtime_config  │  │
-│  │  ├── 解密 API Key → 环境变量    │  │
-│  │  ├── 写入 config.json 到容器    │  │
-│  │  ├── 写入 Runtime 默认 Skills   │  │
-│  │  │   (opencode→anser-coder)│  │
-│  │  └── 写入 Agent 绑定 Skills     │  │
-│  │                                │  │
-│  │  Step 4: 执行（编码闭环 + 消息互通）   │  │
-│  │  ├── /workspace/repo 已存在?             │  │
-│  │  │   ├── 是 → git fetch（增量更新）     │  │
-│  │  │   └── 否 → git clone（首次拉取）     │  │
-│  │  │                                      │  │
-│  │  │  ┌─ opencode run ←→ Worker 消息环 ─┐│  │
-│  │  │  │                                  ││  │
-│  │  │  │  沙箱内 (opencode)              ││  │
-│  │  │  │  ┌────────────────────┐         ││  │
-│  │  │  │  │ ① 读取 TASK_PROMPT │         ││  │
-│  │  │  │  │ ② LLM 生成代码     │ stdout  ││  │
-│  │  │  │  │ ③ write/login.tsx  │────────→││  │
-│  │  │  │  │ ④ run test/lint   │         ││  │
-│  │  │  │  │ ⑤ 失败→LLM修正    │         ││  │
-│  │  │  │  │ ⑥ 成功→exit 0    │         ││  │
-│  │  │  │  └────────────────────┘         ││  │
-│  │  │  │                                  ││  │
-│  │  │  │  Worker (宿主机)                 ││  │
-│  │  │  │  ┌────────────────────────────┐  ││  │
-│  │  │  │  │ Docker SDK 实时捕获 stdout  │  ││  │
-│  │  │  │  │ ↓                            │  ││  │
-│  │  │  │  │ 解析输出 → 写入 DB + 推送 WS │  ││  │
-│  │  │  │  │                              │  ││  │
-│  │  │  │  │ agent_logs:                  │  ││  │
-│  │  │  │  │  [12:02] agent 生成 login.tsx│  ││  │
-│  │  │  │  │  [12:05] agent 运行 test     │  ││  │
-│  │  │  │  │                              │  ││  │
-│  │  │  │  │ issue_timeline:              │  ││  │
-│  │  │  │  │  [12:02] event=agent_log     │  ││  │
-│  │  │  │  │    "正在生成 src/login.tsx"  │  ││  │
-│  │  │  │  │                              │  ││  │
-│  │  │  │  │ WebSocket → 前端实时更新     │  ││  │
-│  │  │  │  └────────────────────────────┘  ││  │
-│  │  │  └──────────────────────────────────┘│  │
-│  │  │                                      │  │
-│  │  └── 退出码 + 工作区检查 → 判定通过/失败 │  │
-│  │                                │  │
-│  │  Step 5: 收尾                  │  │
-│  │  ├── opencode 检查通过:          │  │
-│  │  │   ├── git add → commit → push│  │
-│  │  │   ├── 创建 PR               │  │
-│  │  │   ├── 更新 Issue → in_review│  │
-│  │  │   └── 销毁容器（不再需要）   │  │
-│  │  ├── opencode 检查失败:          │  │
-│  │  │   ├── 写入失败原因到时间线    │  │
-│  │  │   ├── Issue → todo（保留沙箱）│  │
-│  │  │   └── 等待人工提示词 → 重试  │  │
-│  │  └── PR merge → done:            │  │
-│  │      └── 销毁容器（如果还存在）   │  │
-│  └────────────────────────────────┘  │
-│  └────────────────────────────────┘  │
-└──────────────────────────────────────┘
+Project "my-app" (project_id=1)
+│
+├── 容器 anserflow-project-1 (常驻，项目创建时初始化)
+│   ├── opencode / hermes / git / node / python / npm
+│   ├── AutoRemove: false
+│   ├── 资源: 1GB Memory, 2 CPU
+│   │
+│   ├── /workspace/
+│   │   ├── main/                         ← git clone --bare 或初始 worktree（基准）
+│   │   │   └── ...完整代码...
+│   │   ├── issue-42/                     ← git worktree add -b feat/issue-42
+│   │   │   └── src/login.tsx  (Worker A 独占，不受干扰)
+│   │   └── issue-43/                     ← git worktree add -b feat/issue-43
+│   │       └── src/api.ts    (Worker B 独占，不受干扰)
+│   │
+│   └── /home/sandbox/.opencode/          ← bind mount: 项目级运行时数据（Skills/配置）
+│
+├── Issue #42 (in_progress) ──► docker exec opencode run --workdir /workspace/issue-42
+├── Issue #43 (in_progress) ──► docker exec opencode run --workdir /workspace/issue-43
+└── Issue #44 (todo) ──────────► 等待分配
+```
+
+**git worktree 生命周期**：
+
+```bash
+# Issue 开始执行时创建 worktree
+docker exec anserflow-project-1 git worktree add /workspace/issue-42 -b feat/issue-42 main
+
+# Isssue 执行过程中，opencode 在 worktree 内开发
+docker exec anserflow-project-1 opencode run --workdir /workspace/issue-42 "实现登录页"
+
+# Issue 完成后清理（先 push 分支，再 remove worktree）
+docker exec anserflow-project-1 git -C /workspace/issue-42 push origin feat/issue-42
+# PR merge 后
+docker exec anserflow-project-1 git worktree remove /workspace/issue-42
+docker exec anserflow-project-1 git branch -D feat/issue-42
+```
+
+**合并冲突**：由于每个 Issue 在独立 worktree 中开发，代码层面不会出现文件级写冲突。
+当两个 Issue 修改了同一文件的同一区域时，由 GitHub PR 流程在合并时提示冲突，
+属于 Git 正常行为，不归 Worker 处理。
+
+---
+
+### 7.1 执行流程
+
+每个 Issue 在**项目常驻容器**内通过**独立 git worktree** 执行，多 Issue 并发互不干扰：
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  Asynq Worker                                             │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │  Step 1: 准备                                      │  │
+│  │  ├── 读取 Issue 上下文                             │  │
+│  │  ├── 加载 Agent 配置                               │  │
+│  │  └── 加载绑定的 Skills                             │  │
+│  │                                                    │  │
+│  │  Step 2: 确保项目容器存活（常驻）                     │  │
+│  │  ├── 查询 projects.sandbox_container_id             │  │
+│  │  ├── 容器存在且运行中 → 直接复用                    │  │
+│  │  ├── 容器不存在 → ContainerCreate + Start           │  │
+│  │  │   ├── Image: anserflow/sandbox                  │  │
+│  │  │   ├── Memory: 1GB, CPU: 2 cores                │  │
+│  │  │   ├── NamedVol: workspace-{projectID}:/workspace│  │
+│  │  │   ├── BindMount: project-runtime→home (rw)     │  │
+│  │  │   └── AutoRemove: false (常驻)                  │  │
+│  │  └── 首次: git clone 到 /workspace/main            │  │
+│  │                                                    │  │
+│  │  Step 3: 创建 Issue 专属 worktree                  │  │
+│  │  ├── docker exec git worktree add \               │  │
+│  │  │     /workspace/issue-{id} -b feat/issue-{id}    │  │
+│  │  ├── 分支名: feat/issue-{id}                       │  │
+│  │  └── 工作目录: /workspace/issue-{id}（物理隔离）    │  │
+│  │                                                    │  │
+│  │  Step 4: 注入运行时配置                             │  │
+│  │  ├── 读取 Agent runtime_config                      │  │
+│  │  ├── 解密 API Key → 环境变量                        │  │
+│  │  ├── 写入 config.json 到容器                        │  │
+│  │  ├── 写入 Runtime 默认 Skills                       │  │
+│  │  └── 写入 Agent 绑定 Skills                         │  │
+│  │                                                    │  │
+│  │  Step 5: 在 worktree 内执行 opencode               │  │
+│  │  │  docker exec \                                  │  │
+│  │  │    --workdir /workspace/issue-{id} \            │  │
+│  │  │    opencode run "实现登录页"                     │  │
+│  │  │                                                  │  │
+│  │  │  ┌─ opencode exec ←→ Worker 消息环 ──────────┐  │  │
+│  │  │  │  opencode 通过 stdout JSON Lines 实时输出  │  │  │
+│  │  │  │  Worker 解析 → DB + WebSocket → 前端       │  │  │
+│  │  │  └──────────────────────────────────────────┘  │  │
+│  │  │                                                  │  │
+│  │  └── 退出码 + 工作区检查 → 判定通过/失败            │  │
+│  │                                                    │  │
+│  │  Step 6: 收尾                                      │  │
+│  │  ├── opencode 检查通过:                            │  │
+│  │  │   ├── git add → commit → push（在 worktree 内）│  │
+│  │  │   ├── 创建 PR                                   │  │
+│  │  │   ├── 更新 Issue → in_review                    │  │
+│  │  │   └── git worktree remove + branch -D（清理）   │  │
+│  │  ├── opencode 检查失败:                            │  │
+│  │  │   ├── 写入失败原因到时间线                       │  │
+│  │  │   ├── Issue → todo（保留 worktree 待重试）      │  │
+│  │  │   └── 等待人工提示词 → 重试                     │  │
+│  │  ├── Issue done（PR merge）:                       │  │
+│  │  │   └── git worktree remove + branch -D            │  │
+│  │  └── 项目容器不销毁（常驻，给其他 Issue 复用）      │  │
+│  └────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ### 7.1.1 沙箱 ↔ 系统消息互通闭环
 
-opencode 在 Docker 沙箱内通过 **stdout 流 + 退出码** 与 Worker 通信，Worker 负责解析、存储、推送：
+opencode 通过 **docker exec 的 stdout 流 + 退出码** 与 Worker 通信，Worker 负责解析、存储、推送：
 
 ```
-沙箱内 opencode                    宿主机 Worker                   前端 Issue 时间线
-═══════════════                    ════════════                   ════════════════
-                                    ┌─ 启动容器，attach stdout ─┐
-                                    │                           │
-"正在分析 Issue 描述..."  ──stdout──→ 解析 → agent_logs          │
-                                    │         issue_timeline     │
-                                    │         WS push ──────────→ "Agent 开始分析需求"
-                                    │                           │
-"生成文件: src/login.tsx" ──stdout──→ 解析 → agent_logs          │
-                                    │         WS push ──────────→ "正在生成 src/login.tsx"
-                                    │                           │
-"运行测试: 3/4 passed"    ──stdout──→ 解析 → agent_logs          │
-"FAIL: login.test.tsx"             │         WS push ──────────→ "测试 3/4 通过，1 个失败"
-                                    │                           │
-"正在修复 login.test.tsx" ─stdout──→ 解析 → agent_logs          │
-                                    │         WS push ──────────→ "正在修复测试"
-                                    │                           │
-"测试全部通过"            ──stdout──→ 解析 → agent_logs          │
-                                    │         WS push ──────────→ "测试全部通过"
-                                    │                           │
-exit 0                              │ 检查: 退出码=0             │
-                                    │       workspace 有变更     │
-                                    │                           │
-                                    │ git commit + push + PR    │
-                                    │ issue → in_review ────────→ "PR 已提交，等待审核"
-                                    └───────────────────────────┘
+沙箱内 opencode（docker exec）    宿主机 Worker                   前端 Issue 时间线
+══════════════════════════        ════════════                   ════════════════
+                                    ┌─ docker exec, attach stdout ─┐
+                                    │                               │
+"正在分析 Issue 描述..."  ──stdout──→ 解析 → agent_logs              │
+                                    │         issue_timeline         │
+                                    │         WS push ──────────────→ "Agent 开始分析需求"
+                                    │                               │
+"生成文件: src/login.tsx" ──stdout──→ 解析 → agent_logs              │
+                                    │         WS push ──────────────→ "正在生成 src/login.tsx"
+                                    │                               │
+"运行测试: 3/4 passed"    ──stdout──→ 解析 → agent_logs              │
+"FAIL: login.test.tsx"             │         WS push ──────────────→ "测试 3/4 通过，1 个失败"
+                                    │                               │
+"正在修复 login.test.tsx" ─stdout──→ 解析 → agent_logs              │
+                                    │         WS push ──────────────→ "正在修复测试"
+                                    │                               │
+"测试全部通过"            ──stdout──→ 解析 → agent_logs              │
+                                    │         WS push ──────────────→ "测试全部通过"
+                                    │                               │
+exit 0                              │ 检查: 退出码=0                 │
+                                    │       worktree 有变更          │
+                                    │                               │
+                                    │ git commit + push + PR        │
+                                    │ git worktree remove           │
+                                    │ issue → in_review ────────────→ "PR 已提交，等待审核"
+                                    └───────────────────────────────┘
 ```
 
-**Worker 侧 stdout 流式捕获**：
-
-```go
-// internal/sandbox/stream.go
-func (w *Worker) streamLogs(ctx context.Context, containerID string, issueID uint) {
-    reader, _ := w.cli.ContainerLogs(ctx, containerID, container.LogsOptions{
-        ShowStdout: true,
-        ShowStderr: true,
-        Follow:     true,   // 持续跟踪
-    })
-    defer reader.Close()
-
-    scanner := bufio.NewScanner(reader)
-    for scanner.Scan() {
-        line := scanner.Text()
-
-        // ① 写 agent_logs（结构化存储）
-        w.logRepo.Create(ctx, &model.AgentLog{
-            IssueID: issueID,
-            Action:  classifyAction(line),    // 根据关键词分类: generate / test / fix / error
-            Status:  "running",
-            Output:  json.RawMessage(`{"raw":"` + line + `"}`),
-        })
-
-        // ② 写 issue_timeline（供前端展示）
-        w.timelineRepo.Append(ctx, issueID, "agent", "agent_log", "", "", line)
-
-        // ③ 实时推送到 WebSocket → 前端 Issue 时间线组件实时更新
-        w.ws.SendToIssue(issueID, map[string]interface{}{
-            "type": "agent_log",
-            "text": line,
-            "ts":   time.Now().Unix(),
-        })
-    }
-
-    // opencode 退出后检查退出码
-    inspect, _ := w.cli.ContainerInspect(ctx, containerID)
-    exitCode := inspect.State.ExitCode
-    w.handleCompletion(ctx, issueID, containerID, exitCode)
-}
-```
-
-**前端实时展现**：
-
-Issue 详情页的时间线面板通过 WebSocket 订阅该 Issue 的 `agent_log` 事件，消息到达后即时追加到时间线末尾，无需轮询或刷新页面。
+**Worker 侧 stdout 流式捕获**：与旧方案一致，通过 `docker exec` 的 stdout pipe 实时捕获日志行，解析后写入 `agent_logs`、`issue_timeline`，并通过 WebSocket 推送给前端。
 
 | 通信方向 | 通道 | 内容 | 频率 |
 |---------|------|------|------|
-| opencode → Worker | Docker stdout | 实时日志行（生成/测试/修复） | 每秒数次 |
+| opencode → Worker | docker exec stdout | 实时日志行（生成/测试/修复） | 每秒数次 |
 | Worker → MySQL | GORM Insert | `agent_logs`（结构存储）+ `issue_timeline`（展示存储） | 每条 stdout |
 | Worker → Redis | ZADD | 最近 N 条日志缓存（可选，加速前端加载历史） | 每条 |
 | Worker → 前端 | WebSocket | JSON 事件 `{type:"agent_log", text, ts}` | 每条 stdout |
@@ -2214,16 +2216,16 @@ func (w *Worker) StopIssue(issueID uint) error {
         return errors.New("只能停止执行中或已暂停的 Issue")
     }
 
-    // Docker 终止容器 + 销毁
-    timeout := 10
-    w.cli.ContainerStop(ctx, issue.SandboxContainerID, container.StopOptions{Timeout: &timeout})
-    w.cli.ContainerRemove(ctx, issue.SandboxContainerID, container.RemoveOptions{Force: true})
+    // 通过 docker exec kill 终止对应的 opencode 进程
+    project := w.projectRepo.FindByID(issue.ProjectID)
+    pid := w.getOpenCodePID(ctx, project.SandboxContainerID, issueID)
+    w.execInContainer(ctx, project.SandboxContainerID,
+        "kill", "-TERM", strconv.Itoa(pid))
 
     // 回到 backlog，可重新编辑后再执行
     w.issueRepo.UpdateStatus(issueID, "backlog")
-    w.issueRepo.ClearContainerID(issueID)
     w.timelineRepo.Append(issueID, "system", "status_change",
-        issue.Status, "backlog", "执行已停止，容器已销毁")
+        issue.Status, "backlog", "执行已停止")
 
     w.ws.SendToIssue(issueID, map[string]interface{}{
         "type": "status_change",
@@ -2260,11 +2262,13 @@ func (w *Worker) StopIssue(issueID uint) error {
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-| 操作 | Docker API | 沙箱状态 | Issue 状态 | 数据保留 |
-|------|-----------|---------|-----------|---------|
-| **暂停** | `ContainerPause` | 进程冻结，内存保留 | `paused` | ✅ 全部保留 |
-| **恢复** | `ContainerUnpause` | 从断点继续 | `in_progress` | ✅ 继续 |
-| **停止** | `ContainerStop` + `Remove` | 容器销毁 | `backlog` | ❌ 沙箱清空，MySQL 数据保留 |
+| 操作 | Docker API | Issue 状态 | 影响范围 | 数据保留 |
+|------|-----------|-----------|---------|----------|
+| **暂停** | `kill -STOP <opencode_pid>`（docker exec） | `paused` | 仅该 Issue 的 opencode 进程 | ✅ worktree 保留，内存保留 |
+| **恢复** | `kill -CONT <opencode_pid>`（docker exec） | `in_progress` | 仅该 Issue | ✅ 从断点继续 |
+| **停止** | `kill -TERM <opencode_pid>`（docker exec） | `backlog` | 仅该 Issue | ❌ 进程终止，worktree 保留（待重试复用） |
+
+> **为什么不用 ContainerPause？** 容器为项目级常驻，`ContainerPause` 会冻结同项目内所有 Issue。改用进程级信号控制，只能暂停/恢复/停止单个 Issue 的 opencode 进程。
 
 #### 暂停/恢复与 Asynq 任务生命周期
 
@@ -2375,7 +2379,7 @@ func (w *Worker) StopIssue(issueID uint) error {
 }
 ```
 
-**Worker 重启后恢复**：Worker 进程重启时，需恢复两类异常状态的 Issue：
+**Worker 重启后恢复**：Worker 进程重启时，需恢复 in_progress 和 paused 状态的 Issue：
 
 ```
 Worker 启动
@@ -2383,84 +2387,69 @@ Worker 启动
     ├── 1. RecoverRunningIssues — 恢复 in_progress
     │       │
     │       ▼
-    │   扫描 issues WHERE status='in_progress' AND sandbox_container_id IS NOT NULL
+    │   扫描 issues WHERE status='in_progress'
     │       │
-    │       ├── 容器 running → 重新 Attach stdout 流 + 订阅控制频道，继续处理
+    │       ├── 查询 projects.sandbox_container_id  → 检查容器存活
+    │       │   ├── 容器 running → 检查 /workspace/issue-{id} worktree 是否存在
+    │       │   │   ├── 存在 → 检查 opencode 进程是否存活，是则重新 Attach stdout
+    │       │   │   └── 不存在 → 重建 worktree 并重新入队
+    │       │   ├── 容器 stopped → 重启容器（docker start），重新 Attach
+    │       │   └── 容器不存在 → 重创项目容器 + git clone + 重建所有 worktree
     │       │
-    │       ├── 容器 stopped（Docker 重启导致容器停止）
-    │       │       ├── 检查 opencode 退出码（docker inspect .State.ExitCode）
-    │       │       │   ├── exit 0 → 成功但未来得及提交 → 执行 commit/PR 流程 → in_review
-    │       │       │   └── exit 非0 / unknown → 标记失败，Issue → todo，记录异常时间线
-    │       │       └── 更新 Issue 状态 + 通知前端
-    │       │
-    │       └── 容器已销毁 → Issue → backlog + 记录异常时间线
+    │       └── 若 opencode 已退出 → 检查 exit code
+    │           ├── exit 0 → commit + PR → in_review
+    │           └── exit ≠0 → Issue → todo + 记录异常
     │
-    └── 2. RecoverPausedIssues — 恢复 paused（原有逻辑）
+    └── 2. RecoverPausedIssues — 恢复 paused
             │
             ▼
-        扫描 issues WHERE status='paused' AND sandbox_container_id IS NOT NULL
+        扫描 issues WHERE status='paused'
             │
-            ├── 容器存活（paused）→ 恢复 Attach + 订阅控制频道
-            └── 容器已销毁 → Issue → backlog + 记录异常时间线
+            ├── opencode 进程存活（paused by SIGSTOP）→ 重新 Attach + 订阅控制频道
+            └── 进程已不存在 → Issue → backlog + 记录异常
 ```
 
 ```go
 // internal/worker/recovery.go
 
 // RecoverRunningIssues 恢复服务器重启前正在执行的 Issue
-// 场景：服务器重启 → Docker 守护进程重启 → 容器停止（AutoRemove=false，容器还在）
+// 新模型：容器是项目级常驻的，从 projects 表查 container_id
 func (w *Worker) RecoverRunningIssues(ctx context.Context) {
     runningIssues, _ := w.issueRepo.FindByStatus(ctx, "in_progress")
     for _, issue := range runningIssues {
-        if issue.SandboxContainerID == "" {
-            // 异常：in_progress 但没有容器 → 回退到 todo
+        // 查项目容器
+        project := w.projectRepo.FindByID(ctx, issue.ProjectID)
+        containerID := project.SandboxContainerID
+        if containerID == "" {
             w.issueRepo.UpdateStatus(issue.ID, "todo")
             w.timelineRepo.Append(issue.ID, "system", "status_change",
-                "in_progress", "todo", "Worker 重启后未找到沙箱容器，已自动回退等待重试")
+                "in_progress", "todo", "项目容器未初始化，已自动回退")
             continue
         }
 
-        info, err := w.cli.ContainerInspect(ctx, issue.SandboxContainerID)
+        info, err := w.cli.ContainerInspect(ctx, containerID)
         if err != nil {
-            // 容器已销毁
+            // 容器不存在 → 重建项目容器
+            go w.ensureProjectContainer(ctx, issue.ProjectID)
             w.issueRepo.UpdateStatus(issue.ID, "todo")
-            w.issueRepo.ClearContainerID(issue.ID)
-            w.timelineRepo.Append(issue.ID, "system", "status_change",
-                "in_progress", "todo", "沙箱容器已不存在，已自动回退等待重试")
             continue
         }
 
         switch info.State.Status {
         case "running":
-            // 容器仍在运行（Docker 先于 Worker 重启完成）
-            // → 重新 Attach stdout 流 + 订阅控制频道
-            go w.attachAndProcess(ctx, issue)
-            w.timelineRepo.Append(issue.ID, "system", "system_note",
-                "", "", "Worker 重启，已重新连接到运行中的沙箱")
-
-        case "exited", "dead":
-            // 容器已退出（Docker 重启导致容器停止）
-            exitCode := info.State.ExitCode
-            if exitCode == 0 {
-                // opencode 成功退出但未提交 → 执行 commit/PR 流程
-                go w.commitAndCreatePR(ctx, issue)
-                w.timelineRepo.Append(issue.ID, "system", "system_note",
-                    "", "", "Worker 重启，检测到沙箱已完成编码，正在提交")
+            // 容器运行中 → 检查 worktree 是否还存在
+            worktreePath := fmt.Sprintf("/workspace/issue-%d", issue.ID)
+            if w.worktreeExists(ctx, containerID, worktreePath) {
+                go w.attachAndProcess(ctx, issue)
             } else {
-                // 执行失败 → 回退到 todo，等待重试
+                // worktree 丢失 → 重建并重新入队
+                w.createWorktree(ctx, containerID, issue)
                 w.issueRepo.UpdateStatus(issue.ID, "todo")
-                w.issueRepo.ClearContainerID(issue.ID)
-                w.timelineRepo.Append(issue.ID, "system", "status_change",
-                    "in_progress", "todo",
-                    fmt.Sprintf("沙箱执行失败（退出码 %d），已自动回退等待重试", exitCode))
             }
-
-        case "paused":
-            // 容器被 Docker 暂停但 Issue 状态是 in_progress（状态不一致）
-            // → 归并到 paused 恢复流程
-            w.issueRepo.UpdateStatus(issue.ID, "paused")
-            w.timelineRepo.Append(issue.ID, "system", "system_note",
-                "", "", "检测到状态不一致（容器 paused 但 Issue in_progress），已修正为 paused")
+        case "exited", "dead":
+            // 容器停止 → 重启容器，重建所有 Issue 上下文
+            w.cli.ContainerStart(ctx, containerID, container.StartOptions{})
+            w.issueRepo.UpdateStatus(issue.ID, "todo")
         }
     }
 }
@@ -2491,21 +2480,22 @@ func (w *Worker) RecoverPausedIssues(ctx context.Context) {
 
 > **设计要点**：
 > - **恢复优先级**：先恢复 `in_progress`（可能需要继续执行），再恢复 `paused`（等待人工操作）
-> - **幂等安全**：所有恢复操作基于 DB 中的 `sandbox_container_id`，重复执行不会产生副作用
+> - **容器不再按 Issue 追踪**：容器 ID 存在 `projects.sandbox_container_id`，不再存在 `issues.sandbox_container_id`
 > - **容器保护**：`AutoRemove: false` 确保容器不会随 Docker 重启被自动清理
-> - **暂停/恢复的可靠性**依赖于 `sandbox_container_id` 持久化到 DB + Redis Pub/Sub 事件驱动。只要容器未被销毁，Worker 重启后总能重新 Attach、订阅控制频道并恢复上下文。控制频道 `issue:control:{id}` 仅在有 Worker 消费时存在，无额外资源开销。
+> - **暂停/恢复**依赖 opencode 进程 PID + SIGSTOP/SIGCONT 信号，容器重启后 PID 变化，需要重建 worktree 上下文
+> - **issuess 表不再有 sandbox_container_id 字段**：改为通过 `project_id → projects.sandbox_container_id` 间接获取
 
 ### 7.2 安全策略
 
 | 策略 | 配置 |
 |------|------|
-| 资源限制 | CPU 2核 / 内存 512MB / 磁盘 1GB |
+| 资源限制 | CPU 2核 / 内存 1GB / 磁盘 10GB |
 | 执行超时 | 单任务最长 30 分钟，超时强制 SIGKILL |
 | 网络隔离 | 仅允许出站到 GitHub API + LLM API 白名单 |
 | 凭证注入 | GitHub Token 通过环境变量注入，不落盘 |
-| 自动清理 | 执行成功 → 立即销毁容器；执行失败 → 保留容器等待人工介入重试，Issue done 时最终销毁 |
+| 自动清理 | Issue done → git worktree remove + branch -D；容器常驻不销毁 |
 | 非 root 运行 | User `sandbox` (uid 1000)，无 sudo 权限 |
-| 镜像最小化 | Alpine 3.21 基础，预装 Node/Python/Git，不含 Go 运行时 |
+| 镜像最小化 | Alpine 3.21 基础，预装 Node/Python/Git/opencode，不含 Go 运行时 |
 
 ### 7.2.1 数据持久化保障
 
@@ -2719,37 +2709,35 @@ import (
     "github.com/docker/docker/api/types/container"
 )
 
-func createSandbox(ctx context.Context, cfg SandboxConfig) (string, error) {
+// ensureProjectContainer 确保项目容器存活（常驻，所有 Issue 共享）
+func ensureProjectContainer(ctx context.Context, project *model.Project, runtime RuntimeConfig) (string, error) {
     cli, _ := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 
-    if cfg.ExistingContainerID != "" {
-        injectPromptAndRun(ctx, cfg.ExistingContainerID, cfg.TaskPrompt, cfg.Runtime)
-        return cfg.ExistingContainerID, nil
+    // 已有容器且运行中 → 直接复用
+    if project.SandboxContainerID != "" {
+        info, err := cli.ContainerInspect(ctx, project.SandboxContainerID)
+        if err == nil && info.State.Running {
+            return project.SandboxContainerID, nil
+        }
+        // 容器停了就重启
+        if err == nil {
+            cli.ContainerStart(ctx, project.SandboxContainerID, container.StartOptions{})
+            return project.SandboxContainerID, nil
+        }
+        // 容器不存在就创建新的
     }
 
-    // 根据运行时选择镜像
-    image := cfg.Runtime.DockerImage       // 来自 runtimes.docker_image
-
-    // 项目级运行时数据目录（从全局模板复制而来）
-    // 路径格式: /var/lib/anserflow/projects/{projectID}/runtime/
-    projectRuntimeDir := cfg.ProjectRuntimeDir  // 来自 projects.runtime_data_dir
-    homeDir := cfg.Runtime.HomeDir              // 由 RuntimeAdapter.HomeDir() 提供
-
-    // Named Volume：按项目隔离，容器销毁后代码保留，避免大仓库重复 clone
-    workspaceVol := fmt.Sprintf("anserflow-workspace-%d", cfg.ProjectID)
+    workspaceVol := fmt.Sprintf("anserflow-workspace-%d", project.ID)
+    homeDir := runtime.HomeDir
+    projectRuntimeDir := project.RuntimeDataDir
 
     resp, _ := cli.ContainerCreate(ctx, &container.Config{
-        Image: image,
-        Env:   buildEnvVars(cfg),
+        Image: runtime.DockerImage,
+        Env:   buildEnvVars(project),
     }, &container.HostConfig{
-        Memory:     512 * 1024 * 1024,
+        Memory:     1 * 1024 * 1024 * 1024,  // 1GB
         NanoCPUs:   2 * 1e9,
-        AutoRemove: false,
-        // bind mount: 项目级 runtime 目录 → 容器内运行时主目录（读写）
-        // 目录结构（opencode 示例）:
-        //   projectRuntimeDir/skills/   → /home/sandbox/.opencode/skills/
-        //   projectRuntimeDir/config.json → /home/sandbox/.opencode/config.json
-        //   projectRuntimeDir/plugins/  → /home/sandbox/.opencode/plugins/
+        AutoRemove: false,                     // 常驻
         Binds: []string{
             projectRuntimeDir + ":" + homeDir + ":rw",
         },
@@ -2764,41 +2752,50 @@ func createSandbox(ctx context.Context, cfg SandboxConfig) (string, error) {
 
     cli.ContainerStart(ctx, resp.ID, container.StartOptions{})
 
-    // 首次：git clone；后续：git fetch 增量更新
-    prepareRepo(ctx, resp.ID, cfg)
+    // 首次：git clone 到 /workspace/main（作为 worktree 基准）
+    execInContainer(ctx, resp.ID, "git", "clone", project.RepoURL, "/workspace/main")
 
-    // 注入运行时配置 + 执行（写入 homeDir 子路径的 config.json）
-    injectRuntimeConfig(ctx, resp.ID, cfg.Runtime)
-    // 根据 execute_template 渲染命令: "opencode run \"...\" --model ..."
-    cmd := renderTemplate(cfg.Runtime.ExecuteTemplate, cfg.Runtime.Config, cfg.TaskPrompt)
-    execInContainer(ctx, resp.ID, cmd)
+    // 持久化容器 ID 到 projects 表
+    updateProjectContainerID(project.ID, resp.ID)
     return resp.ID, nil
 }
 
-// prepareRepo 首次 clone 或增量 fetch（通过 GitOps 抽象）
-func prepareRepo(ctx context.Context, containerID string, cfg SandboxConfig) {
-    ops := gitMgr.NewOps(containerID, "/workspace/repo")
-    if ops.IsRepo(ctx) {
-        ops.FetchAll(ctx)
-        ops.Checkout(ctx, cfg.Branch)
-        ops.Pull(ctx, cfg.Branch)
-    } else {
-        ops.Clone(ctx, cfg.RepoURL, cfg.Branch, "/workspace/repo")
-    }
+// createWorktree 为 Issue 创建独立的 git worktree
+func createWorktree(ctx context.Context, containerID string, issue *model.Issue) error {
+    worktreePath := fmt.Sprintf("/workspace/issue-%d", issue.ID)
+    branchName := fmt.Sprintf("feat/issue-%d", issue.ID)
+    return execInContainer(ctx, containerID,
+        "git", "-C", "/workspace/main", "worktree", "add",
+        worktreePath, "-b", branchName)
 }
 
-// 在 Issue→done 时销毁容器（Named Volume 保留，后续 Issue 可复用）
-func destroySandbox(ctx context.Context, containerID string) {
+// removeWorktree 清理 Issue 的 worktree 和分支
+func removeWorktree(ctx context.Context, containerID string, issueID uint) error {
+    worktreePath := fmt.Sprintf("/workspace/issue-%d", issueID)
+    branchName := fmt.Sprintf("feat/issue-%d", issueID)
+    execInContainer(ctx, containerID,
+        "git", "-C", "/workspace/main", "worktree", "remove", worktreePath)
+    execInContainer(ctx, containerID,
+        "git", "-C", "/workspace/main", "branch", "-D", branchName)
+    return nil
+}
+
+// execOpenCode 在指定 worktree 内执行 opencode
+func execOpenCode(ctx context.Context, containerID string, issue *model.Issue, task string) error {
+    worktreePath := fmt.Sprintf("/workspace/issue-%d", issue.ID)
+    return execInContainer(ctx, containerID,
+        "opencode", "run",
+        "--workdir", worktreePath,
+        "--task", task)
+}
+
+// 在项目删除时清理容器 + Named Volume
+func destroyProjectSandbox(ctx context.Context, projectID uint, containerID string) error {
     cli, _ := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
     cli.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true})
-}
-
-// 在项目删除时清理 Named Volume
-func destroyWorkspaceVolume(ctx context.Context, projectID uint) error {
-    cli, _ := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
     return cli.VolumeRemove(ctx, fmt.Sprintf("anserflow-workspace-%d", projectID), true)
 }
-}```
+```
 
 ### 7.3.1 运行时数据目录 — 三层架构
 
