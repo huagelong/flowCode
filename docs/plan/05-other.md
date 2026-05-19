@@ -44,6 +44,88 @@
 
 ---
 
+## 目标架构与参考骨架差异清单
+
+当前仓库中的参考代码位于：
+
+`reference/workflow-backend-skeleton/`
+
+该目录的定位是：
+
+- 用于沉淀当前已经讨论过的工作流后端骨架
+- 用于给后续正式实现提供可读的包边界和最小调用链参考
+- 不直接代表本文目标架构已经落地
+
+### 建议保留的模块
+
+这些模块与目标架构并不冲突，可以作为后续正式实现的低风险参考：
+
+- `internal/model/`
+  说明：`DiscussionState / PlanSpec / PlanTask / Issue / IssueSpec / AutomationAttempt` 的实体拆分方向与当前工作流设计一致。
+- `internal/convert/`
+  说明：JSON 字段编解码与 model 回填可直接复用思路，但正式实现时应按最终目录决定是否保留 `convert` 命名。
+- `internal/store/interfaces.go`
+  说明：`ConversationStore / MessageStore / DiscussionStateStore / PlanStore / PlanTaskStore / IssueStore / IssueSpecStore / AutomationAttemptStore` 这组接口边界可保留。
+- `internal/store/gormstore/`
+  说明：当前只是最小 GORM 骨架，但 `Find/List/Create/Update/Mark` 风格和事务参与方式可延续。
+- `internal/app/discussion/`
+  说明：讨论态从聊天消息抽取结构化状态的应用层边界是合理的。
+- `internal/app/planning/`
+  说明：`DiscussionState -> PlanSpec -> PlanTask -> Issue` 这条业务主链拆分可保留。
+- `internal/app/execution/`
+  说明：执行层把 `Issue / IssueSpec / AutomationAttempt` 分开处理的方向与目标架构一致。
+
+### 建议废弃或不要直接沿用的部分
+
+这些内容只是为了让参考骨架可读、可串链，不建议直接作为正式实现定稿：
+
+- `internal/bootstrap/`
+  说明：当前是最小手工装配骨架，未接入项目最终需要的配置、日志、权限、中间件、优雅关闭、健康检查细节。
+- `internal/domain/*` 下的 stub
+  说明：当前仅用于占位，不代表正式的 `anserAgent / planner / compiler / orchestrator` 能力实现。
+- `transport/http` 中的简化错误处理
+  说明：当前统一 `respondError` 仅返回 message，和目标文档中的国际化错误码体系还不一致。
+- `go.mod`
+  说明：当前模块名与依赖版本只是参考占位，不应直接作为正式模块定义。
+
+### 建议做映射迁移的模块
+
+这些模块有价值，但正式实现时更适合映射到目标架构中的其他目录，而不是原样沿用：
+
+- `internal/app/execution/` -> 目标架构中的 `internal/agent/`、`internal/status/`、`internal/worker/`、`internal/runtime/`
+  说明：当前执行层只覆盖了业务工作流，正式实现时要拆回 Agent 编排、状态机、Worker、Runtime 管理。
+- `internal/transport/http/` -> 目标架构中的正式 `handler/router/middleware`
+  说明：当前路由已经能表达资源边界，但未接入 JWT、Casbin、国际化错误码、Swagger 注解。
+- `internal/store/gormstore/` -> 目标架构中的正式持久化层
+  说明：可复用接口语义，但实际实现还需要补索引策略、分页、批处理、事务事件、审计字段等。
+
+### 当前最关键的未覆盖模块
+
+参考骨架当前还没有覆盖这些目标架构中的核心部分：
+
+- `internal/agent/`
+- `internal/runtime/`
+- `internal/sandbox/`
+- `internal/git/`
+- `internal/status/`
+- `internal/notification/`
+- `internal/token/`
+- `internal/ws/`
+- `internal/scheduler/`
+- `internal/worker/`
+- `internal/middleware/`
+
+### 结论
+
+正式实现时建议遵循下面这条原则：
+
+- 工作流实体与状态机设计，可参考 `reference/workflow-backend-skeleton/internal/model`、`internal/app`、`internal/store`
+- Agent、Runtime、Sandbox、Worker、WebSocket、权限与中间件体系，仍以本文目标架构章节为准重新落地
+
+这样可以保留已经明确的业务边界，又不会让参考骨架反过来绑死正式目录结构。
+
+---
+
 ## 二、技术栈总览
 
 ```
