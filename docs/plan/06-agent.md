@@ -2,6 +2,25 @@
 
 ---
 
+## 参考代码映射
+
+> 当前仓库中已有一版与本文相邻的参考骨架代码，位置如下：
+>
+> `reference/workflow-backend-skeleton/`
+>
+> 当前最接近本文能力边界的参考目录：
+>
+> - 讨论态骨架：`reference/workflow-backend-skeleton/internal/app/discussion/`
+> - 规划骨架：`reference/workflow-backend-skeleton/internal/app/planning/`
+> - 执行骨架：`reference/workflow-backend-skeleton/internal/app/execution/`
+> - 领域层 stub：`reference/workflow-backend-skeleton/internal/domain/`
+>
+> 差异说明：
+>
+> - 本文描述的是 `anserAgent` 目标体系与完整 `internal/agent/` 结构。
+> - 参考代码当前并未实现本文中的五层记忆、Skill 自改进、Agent 核心循环等能力。
+> - 因此该目录只能作为工作流后端与执行链路的参考，不等价于本文 Agent 架构已落地。
+
 ## 一、系统定位
 
 anserAgent 是 AnserFlow 的通用智能体内核，基于 Eino（Go 原生 AI 框架）构建，替代原 eino-* Skills 硬编码编排，承担两大职责：

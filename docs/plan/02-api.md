@@ -2,6 +2,28 @@
 
 ---
 
+## 参考代码映射
+
+> 当前仓库里已有一版参考性质的 Go 后端骨架实现，因其目录和职责边界与本文目标架构不完全一致，暂不作为正式实现入口。
+>
+> 参考代码目录：
+>
+> `reference/workflow-backend-skeleton/`
+>
+> 关键映射：
+>
+> - 启动入口：`reference/workflow-backend-skeleton/cmd/server/main.go`
+> - 启动装配：`reference/workflow-backend-skeleton/internal/bootstrap/`
+> - HTTP 路由与 Handler：`reference/workflow-backend-skeleton/internal/transport/http/`
+> - Discussion / Planning / Execution 应用层：`reference/workflow-backend-skeleton/internal/app/`
+> - Store 接口与 GORM 实现：`reference/workflow-backend-skeleton/internal/store/`
+> - 数据模型与 JSON 映射：`reference/workflow-backend-skeleton/internal/model/`、`reference/workflow-backend-skeleton/internal/convert/`
+>
+> 使用约定：
+>
+> - 本文仍以目标架构说明为准。
+> - 上述目录仅作为当前阶段的参考骨架，不代表最终正式目录已经定版。
+
 ### 框架补充说明
 
 > 以下为生产级 Gin 项目的标准配套设施，确保系统可维护、可观测、可扩展。

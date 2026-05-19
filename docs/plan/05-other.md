@@ -2,6 +2,25 @@
 
 ---
 
+## 参考代码映射
+
+> 当前仓库里的 Go 代码骨架已被单独归档为参考实现，不占用正式根目录实现位置。
+>
+> 参考代码目录：
+>
+> `reference/workflow-backend-skeleton/`
+>
+> 对应关系：
+>
+> - 参考模块根：`reference/workflow-backend-skeleton/go.mod`
+> - 参考启动入口：`reference/workflow-backend-skeleton/cmd/server/main.go`
+> - 参考业务代码：`reference/workflow-backend-skeleton/internal/`
+>
+> 解释：
+>
+> - 本文中的目录树描述的是目标仓库结构。
+> - 当前参考代码只是一版可阅读、可继续拆分的骨架，不应视为最终正式目录已定稿。
+
 # AnserFlow — 多智能体协作项目管理系统 架构分析文档
 
 ## 一、系统愿景

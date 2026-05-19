@@ -2,6 +2,23 @@
 
 ---
 
+## 参考代码映射
+
+> 当前仓库中已存在一版与本文相关的参考骨架代码，位置如下：
+>
+> `reference/workflow-backend-skeleton/`
+>
+> 与本文最相关的参考目录：
+>
+> - 执行链路骨架：`reference/workflow-backend-skeleton/internal/app/execution/`
+> - 执行相关数据访问：`reference/workflow-backend-skeleton/internal/store/gormstore/`
+> - 执行相关 HTTP 入口：`reference/workflow-backend-skeleton/internal/transport/http/`
+>
+> 差异说明：
+>
+> - 该参考代码目前只覆盖了 `Issue / IssueSpec / AutomationAttempt` 一类工作流后端骨架。
+> - 本文中的 `internal/agent`、`internal/runtime`、`internal/sandbox`、`internal/git` 等目录仍属于目标架构设计，仓库中尚未按本文完整落地。
+
 ## 六、AI Agent 框架：Eino + 自研封装
 
 ### 架构分层
