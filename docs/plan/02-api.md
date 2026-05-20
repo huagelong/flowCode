@@ -1,138 +1,23 @@
 ﻿# AnserFlow - API / Backend
 
+> 参考代码映射见 [07-architecture.md](07-architecture.md) §建议保留的模块 / 建议废弃的模块 / 建议做映射迁移的模块。
+
 ---
-
-## 参考代码映射
-
-> 当前仓库里已有一版参考性质的 Go 后端骨架实现，因其目录和职责边界与本文目标架构不完全一致，暂不作为正式实现入口。
->
-> 参考代码目录：
->
-> `reference/workflow-backend-skeleton/`
->
-> 关键映射：
->
-> - 启动入口：`reference/workflow-backend-skeleton/cmd/server/main.go`
-> - 启动装配：`reference/workflow-backend-skeleton/internal/bootstrap/`
-> - HTTP 路由与 Handler：`reference/workflow-backend-skeleton/internal/transport/http/`
-> - Discussion / Planning / Execution 应用层：`reference/workflow-backend-skeleton/internal/app/`
-> - Store 接口与 GORM 实现：`reference/workflow-backend-skeleton/internal/store/`
-> - 数据模型与 JSON 映射：`reference/workflow-backend-skeleton/internal/model/`、`reference/workflow-backend-skeleton/internal/convert/`
->
-> 使用约定：
->
-> - 本文仍以目标架构说明为准。
-> - 上述目录仅作为当前阶段的参考骨架，不代表最终正式目录已经定版。
 
 ### 框架补充说明
 
 > 以下为生产级 Gin 项目的标准配套设施，确保系统可维护、可观测、可扩展。
 
-#### Viper — 配置管理
-
-`github.com/spf13/viper` 统一管理 `config.yaml`，支持环境变量覆盖（如 `DB_HOST`、`REDIS_ADDR` 覆盖配置文件值），生产环境敏感信息通过环境变量注入。
-
-```go
-viper.SetConfigName("config")
-viper.AddConfigPath(".")
-viper.AutomaticEnv() // ENV 自动覆盖
-viper.ReadInConfig()
-```
-
-#### Zap — 结构化日志
-
-`go.uber.org/zap` 替代标准库 `log`，支持 JSON 格式输出、日志分级（Debug/Info/Warn/Error）、按时间/大小自动切割。GORM 可直接接入 Zap 作为日志后端：
-
-```go
-logger, _ := zap.NewProduction()
-db, _ := gorm.Open(mysql.Open(dsn), &gorm.Config{
-    Logger: logger.New(gormLogger.Info, &gormLogger.Config{LogLevel: gormLogger.Info}),
-})
-```
-
-#### go-playground/validator — 请求校验
-
-Gin 原生集成了 `github.com/go-playground/validator`，通过 struct tag 声明校验规则：
-
-```go
-type CreateIssueReq struct {
-    Title       string `json:"title" binding:"required,min=1,max=256"`
-    Priority    string `json:"priority" binding:"required,oneof=p0 p1 p2 p3 p4"`
-    ProjectID   uint   `json:"project_id" binding:"required"`
-}
-```
-
-#### Casbin — 权限控制
-
-`github.com/casbin/casbin` 实现 RBAC，支持组织级角色（owner/admin/member）和资源级权限（项目/Issue/Agent）。策略模型存储在 MySQL 中，运行时动态加载：
-
-```ini
-[request_definition]
-r = sub, obj, act
-[policy_definition]
-p = sub, obj, act
-[role_definition]
-g = _, _
-[policy_effect]
-e = some(where (p.eft == allow))
-[matchers]
-m = g(r.sub, p.sub) && keyMatch(r.obj, p.obj) && regexMatch(r.act, p.act)
-```
-
-#### Swagger — API 文档
-
-`github.com/swaggo/swag` + `github.com/swaggo/gin-swagger`，通过代码注解自动生成 OpenAPI 3.0 文档，开发环境访问 `/swagger/index.html`：
-
-```go
-// @title           AnserFlow API
-// @version         1.0
-// @host            localhost:8080
-// @BasePath        /api
-func main() { /* ... */ }
-```
-
-#### CORS — 跨域支持
-
-`github.com/gin-contrib/cors` 允许 SPA 前端跨域访问 API：
-
-```go
-r.Use(cors.New(cors.Config{
-    AllowOrigins: []string{"http://localhost:3000", "http://localhost:3001"},
-    AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-    AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
-}))
-```
-
-#### 优雅关闭
-
-Go 标准库 `signal` + `http.Server.Shutdown`，确保收到 SIGINT/SIGTERM 时完成进行中的请求再退出：
-
-```go
-srv := &http.Server{Addr: ":8080", Handler: r}
-go srv.ListenAndServe()
-
-quit := make(chan os.Signal, 1)
-signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-<-quit
-
-ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-defer cancel()
-srv.Shutdown(ctx)
-```
-
-#### 健康检查
-
-`/api/health` 端点返回数据库、Redis 连通性，供 K8s/Docker 探活：
-
-```go
-r.GET("/api/health", func(c *gin.Context) {
-    c.JSON(200, gin.H{
-        "status": "ok",
-        "db":     checkDB(),
-        "redis":  checkRedis(),
-    })
-})
-```
+| 框架/库 | 用途 | 配置要点 |
+|---------|------|----------|
+| **Viper** (`spf13/viper`) | 配置管理 | `config.yaml` + `AutomaticEnv()` 环境变量覆盖 |
+| **Zap** (`uber-go/zap`) | 结构化日志 | JSON 格式输出，GORM 接入 Zap 作为日志后端 |
+| **validator** (`go-playground/validator`) | 请求校验 | Gin 原生集成，struct tag 声明规则（`binding:"required,min=1"`） |
+| **Casbin** (`casbin/casbin`) | RBAC 权限 | 策略模型存 MySQL，支持组织/项目/Issue 级权限 |
+| **Swagger** (`swaggo/swag`) | API 文档 | 代码注解 → OpenAPI 3.0，开发环境 `/swagger/index.html` |
+| **CORS** (`gin-contrib/cors`) | 跨域支持 | 白名单 `AllowOrigins`，SPA 跨域访问 API |
+| **优雅关闭** | Go `signal` + `http.Server.Shutdown` | SIGINT/SIGTERM 时完成进行中请求，10s 超时 |
+| **健康检查** | `/api/health` 端点 | 返回 DB + Redis 连通性，供 K8s/Docker 探活 |
 
 #### OAuth2 — 第三方登录（GitHub）
 

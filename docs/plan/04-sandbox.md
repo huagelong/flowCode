@@ -1,23 +1,8 @@
 ﻿# AnserFlow - Sandbox / Agent
 
+> 参考代码映射见 [07-architecture.md](07-architecture.md) §建议保留的模块 / 建议废弃的模块 / 建议做映射迁移的模块。
+
 ---
-
-## 参考代码映射
-
-> 当前仓库中已存在一版与本文相关的参考骨架代码，位置如下：
->
-> `reference/workflow-backend-skeleton/`
->
-> 与本文最相关的参考目录：
->
-> - 执行链路骨架：`reference/workflow-backend-skeleton/internal/app/execution/`
-> - 执行相关数据访问：`reference/workflow-backend-skeleton/internal/store/gormstore/`
-> - 执行相关 HTTP 入口：`reference/workflow-backend-skeleton/internal/transport/http/`
->
-> 差异说明：
->
-> - 该参考代码目前只覆盖了 `Issue / IssueSpec / AutomationAttempt` 一类工作流后端骨架。
-> - 本文中的 `internal/agent`、`internal/runtime`、`internal/sandbox`、`internal/git` 等目录仍属于目标架构设计，仓库中尚未按本文完整落地。
 
 ## 六、AI Agent 框架：Eino + 自研封装
 
@@ -596,21 +581,9 @@ statusMgr.Transition(ctx, issueID, "backlog", "todo")
 - 资源限额、网络隔离、超时清理等策略集中管理
 - 便于替换沙箱方案（如 Firecracker）
 
-**实现**：
+**核心接口**：
 
 ```go
-// internal/sandbox/sandbox_manager.go
-package sandbox
-
-import (
-    "context"
-    "fmt"
-    "time"
-
-    "github.com/docker/docker/api/types/container"
-    "github.com/docker/docker/client"
-)
-
 type SandboxConfig struct {
     IssueID        uint
     Image          string
@@ -621,62 +594,19 @@ type SandboxConfig struct {
     ExistingID     string // 复用已有容器
 }
 
-type SandboxHandle struct {
-    ContainerID string
-    CreatedAt    time.Time
-}
-
 type SandboxManager struct {
     cli    *client.Client
     config Config
 }
 
-func NewSandboxManager(cli *client.Client, cfg Config) *SandboxManager {
-    return &SandboxManager{cli: cli, config: cfg}
-}
-
-// Create 创建沙箱容器（网络隔离 + 资源限额）
-func (m *SandboxManager) Create(ctx context.Context, cfg SandboxConfig) (*SandboxHandle, error) {
-    if cfg.ExistingID != "" {
-        return &SandboxHandle{ContainerID: cfg.ExistingID}, nil
-    }
-    // 创建容器 + 网络隔离 + 资源限额
-    resp, err := m.cli.ContainerCreate(ctx,
-        &container.Config{Image: cfg.Image, Env: buildEnv(cfg.EnvVars)},
-        &container.HostConfig{
-            Memory:     int64(cfg.MaxMemoryMB) * 1024 * 1024,
-            AutoRemove: false,  // 不自动销毁，保障 Worker 重启后可恢复
-        },
-        nil, nil, fmt.Sprintf("anserflow-issue-%d", cfg.IssueID),
-    )
-    if err != nil {
-        return nil, fmt.Errorf("create sandbox: %w", err)
-    }
-    return &SandboxHandle{ContainerID: resp.ID, CreatedAt: time.Now()}, nil
-}
-
-// Pause 冻结容器（进程挂起，内存保留）
-func (m *SandboxManager) Pause(ctx context.Context, containerID string) error {
-    return m.cli.ContainerPause(ctx, containerID)
-}
-
-// Resume 解冻容器
-func (m *SandboxManager) Resume(ctx context.Context, containerID string) error {
-    return m.cli.ContainerUnpause(ctx, containerID)
-}
-
-// Destroy 销毁容器
-func (m *SandboxManager) Destroy(ctx context.Context, containerID string) error {
-    return m.cli.ContainerRemove(ctx, containerID,
-        container.RemoveOptions{Force: true})
-}
-
-// IsAlive 检查容器是否运行中
-func (m *SandboxManager) IsAlive(ctx context.Context, containerID string) bool {
-    _, err := m.cli.ContainerInspect(ctx, containerID)
-    return err == nil
-}
+func (m *SandboxManager) Create(ctx context.Context, cfg SandboxConfig) (*SandboxHandle, error)
+func (m *SandboxManager) Pause(ctx context.Context, containerID string) error
+func (m *SandboxManager) Resume(ctx context.Context, containerID string) error
+func (m *SandboxManager) Destroy(ctx context.Context, containerID string) error
+func (m *SandboxManager) IsAlive(ctx context.Context, containerID string) bool
 ```
+
+> 实现细节：容器名 `anserflow-issue-{id}`，`AutoRemove=false`（保障 Worker 重启后可恢复），`Memory` 和网络白名单来自 `SandboxConfig`。
 
 ### RuntimeManager — 运行时管理器（适配器模式）
 
@@ -797,265 +727,39 @@ func (r *Registry) GetAdapter(name string) RuntimeAdapter { return r.adapters[na
 func (r *Registry) GetParser(name string) OutputParser    { return r.parsers[name] }
 ```
 
-**内置实现 — opencode 适配器**：
+**内置运行时路径映射**：
+
+| 属性 | opencode | hermes |
+|------|----------|--------|
+| HomeDir | `/home/sandbox/.opencode` | `/home/sandbox/.hermes` |
+| ConfigPath | `.opencode/config.json` | `.hermes/config.yaml` |
+| SkillsMountPath | `.opencode/skills` | `.hermes/skills` |
+| SessionPath | `.local/share/opencode/sessions/*.jsonl` | `.hermes/sessions/*.jsonl` |
+| EnvKey(openai) | `OPENAI_API_KEY` | `OPENAI_API_KEY` |
+| EnvKey(openrouter) | — | `OPENROUTER_API_KEY` |
+
+**RuntimeManager 核心方法**：
 
 ```go
-// internal/runtime/adapters/opencode.go
-package adapters
-
-type OpenCodeAdapter struct{}
-
-func (a *OpenCodeAdapter) Name() string { return "opencode" }
-func (a *OpenCodeAdapter) HomeDir() string  { return "/home/sandbox/.opencode" }
-func (a *OpenCodeAdapter) ConfigPath() string {
-    return "/home/sandbox/.opencode/config.json"
-}
-func (a *OpenCodeAdapter) SkillsMountPath() string {
-    return "/home/sandbox/.opencode/skills"
-}
-func (a *OpenCodeAdapter) SessionPath() string {
-    return "/home/sandbox/.local/share/opencode/sessions/*.jsonl"
-}
-
-func (a *OpenCodeAdapter) RenderConfig(config map[string]interface{}) (string, error) {
-    cfg := map[string]interface{}{
-        "model":    config["model"],
-        "provider": config["provider"],
-        "agent":    config["agent"],
-        "thinking":  config["thinking"],
-        "permissions": map[string]bool{
-            "read": true, "write": true, "bash": true, "glob": true, "grep": true,
-        },
-    }
-    if maxIter, ok := config["max_iterations"]; ok {
-        cfg["maxTurns"] = maxIter
-    }
-    return toJSON(cfg), nil
-}
-
-func (a *OpenCodeAdapter) EnvMapping(config map[string]interface{}, key string) map[string]string {
-    provider := config["provider"].(string)
-    return map[string]string{
-        strings.ToUpper(provider) + "_API_KEY": key,
-    }
-}
-
-type OpenCodeParser struct{}
-
-func (p *OpenCodeParser) ParseLine(line []byte) *ParsedEvent {
-    var event map[string]interface{}
-    if json.Unmarshal(line, &event) != nil {
-        return nil // 非 JSON，由 Worker 兼容逻辑处理
-    }
-    result := &ParsedEvent{}
-    if usage, ok := event["token_usage"]; ok {
-        m := usage.(map[string]interface{})
-        result.TokenUsage = &TokenUsageDetail{
-            InputTokens:      toInt64(m["input_tokens"]),
-            OutputTokens:     toInt64(m["output_tokens"]),
-            CacheReadTokens:  toInt64(m["cache_read_input_tokens"]),
-            CacheWriteTokens: toInt64(m["cache_creation_input_tokens"]),
-        }
-    }
-    if content, ok := event["content"]; ok {
-        result.Type = "agent_log"
-        result.Content = fmt.Sprintf("%v", content)
-    }
-    return result
-}
-
-func (p *OpenCodeParser) ParseSessionFile(content []byte) (*TokenSummary, error) {
-    var totalInput, totalOutput int64
-    scanner := bufio.NewScanner(bytes.NewReader(content))
-    for scanner.Scan() {
-        var msg struct {
-            TokenUsage *struct {
-                InputTokens  int64 `json:"input_tokens"`
-                OutputTokens int64 `json:"output_tokens"`
-            } `json:"token_usage"`
-        }
-        if json.Unmarshal(scanner.Bytes(), &msg) == nil && msg.TokenUsage != nil {
-            totalInput += msg.TokenUsage.InputTokens
-            totalOutput += msg.TokenUsage.OutputTokens
-        }
-    }
-    return &TokenSummary{TotalInput: totalInput, TotalOutput: totalOutput}, nil
-}
-```
-
-**内置实现 — hermes 适配器**：
-
-Hermes Agent（by Nous Research）是开源 AI Agent，Python 编写，支持 20+ Provider、持久记忆、Skills 系统、MCP 集成。配置目录 `~/.hermes/`，配置文件 `config.yaml`（非机密）+ `.env`（API Key），Skills 路径 `~/.hermes/skills/`，Session 路径 `~/.hermes/sessions/`。
-
-```go
-// internal/runtime/adapters/hermes.go
-package adapters
-
-type HermesAdapter struct{}
-
-func (a *HermesAdapter) Name() string        { return "hermes" }
-func (a *HermesAdapter) HomeDir() string     { return "/home/sandbox/.hermes" }
-func (a *HermesAdapter) ConfigPath() string  { return "/home/sandbox/.hermes/config.yaml" }
-func (a *HermesAdapter) SkillsMountPath() string {
-    return "/home/sandbox/.hermes/skills"
-}
-func (a *HermesAdapter) SessionPath() string {
-    return "/home/sandbox/.hermes/sessions/*.jsonl"
-}
-
-func (a *HermesAdapter) RenderConfig(config map[string]interface{}) (string, error) {
-    provider := config["provider"].(string)
-    model := config["model"].(string)
-    yaml := fmt.Sprintf("model: %s/%s\n", provider, model)
-    if personality, ok := config["personality"]; ok {
-        yaml += fmt.Sprintf("personality: %s\n", personality)
-    }
-    if maxTurns, ok := config["max_iterations"]; ok {
-        yaml += fmt.Sprintf("max_turns: %v\n", maxTurns)
-    }
-    yaml += "terminal:\n  backend: local\n"
-    return yaml, nil
-}
-
-func (a *HermesAdapter) EnvMapping(config map[string]interface{}, key string) map[string]string {
-    provider := config["provider"].(string)
-    envKey := strings.ToUpper(provider) + "_API_KEY"
-    // OpenRouter 使用 OPENROUTER_API_KEY
-    if provider == "openrouter" {
-        envKey = "OPENROUTER_API_KEY"
-    }
-    return map[string]string{envKey: key}
-}
-
-type HermesParser struct{}
-
-func (p *HermesParser) ParseLine(line []byte) *ParsedEvent {
-    var event map[string]interface{}
-    if json.Unmarshal(line, &event) != nil {
-        return nil
-    }
-    result := &ParsedEvent{}
-    if usage, ok := event["token_usage"]; ok {
-        m := usage.(map[string]interface{})
-        result.TokenUsage = &TokenUsageDetail{
-            InputTokens:  toInt64(m["input_tokens"]),
-            OutputTokens: toInt64(m["output_tokens"]),
-        }
-    }
-    if content, ok := event["content"]; ok {
-        result.Type = "agent_log"
-        result.Content = fmt.Sprintf("%v", content)
-    }
-    return result
-}
-
-func (p *HermesParser) ParseSessionFile(content []byte) (*TokenSummary, error) {
-    // Hermes session 文件格式待确认，暂按 JSONL 解析
-    var totalInput, totalOutput int64
-    scanner := bufio.NewScanner(bytes.NewReader(content))
-    for scanner.Scan() {
-        var msg struct {
-            TokenUsage *struct {
-                InputTokens  int64 `json:"input_tokens"`
-                OutputTokens int64 `json:"output_tokens"`
-            } `json:"token_usage"`
-        }
-        if json.Unmarshal(scanner.Bytes(), &msg) == nil && msg.TokenUsage != nil {
-            totalInput += msg.TokenUsage.InputTokens
-            totalOutput += msg.TokenUsage.OutputTokens
-        }
-    }
-    return &TokenSummary{TotalInput: totalInput, TotalOutput: totalOutput}, nil
-}
-```
-
-**RuntimeManager 使用适配器**：
-
-```go
-// internal/runtime/runtime_manager.go
-package runtime
-
-type ResolvedSandboxConfig struct {
-    ExecCommand   string            // 最终执行命令
-    ContainerEnvs map[string]string // 注入容器的环境变量
-    ConfigJSON    string            // 写入容器的 config.json
-    ConfigPath    string            // 配置文件路径（HomeDir 子路径）
-    HomeDir       string            // 运行时主目录（bind mount 目标）
-    SkillsPath    string            // Skills 容器内路径（HomeDir 子路径）
-    SessionPath   string            // 会话文件路径
-}
-
 type RuntimeManager struct {
     registry *Registry
     crypto   CryptoService
 }
 
-// ResolveConfig 通过适配器解析运行时配置
-func (m *RuntimeManager) ResolveConfig(
-    ctx context.Context,
-    runtimeName string,
-    executeTemplate string,
-    runtimeConfig map[string]interface{},
-    prompt string,
-) (*ResolvedSandboxConfig, error) {
-    adapter := m.registry.GetAdapter(runtimeName)
-    if adapter == nil {
-        return nil, fmt.Errorf("unknown runtime: %s", runtimeName)
-    }
-
-    // 1. 解密 API Key
-    apiKey, _ := m.crypto.Decrypt(runtimeConfig["api_key_encrypted"].(string))
-
-    // 2. 通过适配器渲染配置文件
-    configJSON, _ := adapter.RenderConfig(runtimeConfig)
-
-    // 3. 渲染 execute_template（通用，不依赖具体运行时）
-    tmpl, _ := template.New("exec").Parse(executeTemplate)
-    var buf strings.Builder
-    tmpl.Execute(&buf, map[string]string{
-        "model":   fmt.Sprintf("%v", runtimeConfig["model"]),
-        "prompt":  prompt,
-    })
-
-    // 4. 通过适配器映射环境变量
-    envs := adapter.EnvMapping(runtimeConfig, apiKey)
-
-    return &ResolvedSandboxConfig{
-        ExecCommand:   buf.String(),
-        ContainerEnvs: envs,
-        ConfigJSON:    configJSON,
-        ConfigPath:    adapter.ConfigPath(),
-        HomeDir:       adapter.HomeDir(),
-        SkillsPath:    adapter.SkillsMountPath(),
-        SessionPath:   adapter.SessionPath(),
-    }, nil
-}
+// ResolveConfig 通过适配器解析运行时配置：
+//   1. 解密 API Key → 2. adapter.RenderConfig → 3. 渲染 execute_template → 4. adapter.EnvMapping
+func (m *RuntimeManager) ResolveConfig(ctx context.Context, runtimeName string, ...) (*ResolvedSandboxConfig, error)
 
 // GetParser 获取输出解析器
-func (m *RuntimeManager) GetParser(runtimeName string) OutputParser {
-    return m.registry.GetParser(runtimeName)
-}
+func (m *RuntimeManager) GetParser(runtimeName string) OutputParser
 ```
 
 **Worker 调用（运行时无关）**：
 
 ```go
-// Worker 不再硬编码 opencode，通过适配器统一处理
 resolved, _ := runtimeMgr.ResolveConfig(ctx, runtime.Name, runtime.ExecuteTemplate, agent.RuntimeConfig, issue.Prompt)
 parser := runtimeMgr.GetParser(runtime.Name)
-
-sandboxMgr.Create(ctx, SandboxConfig{
-    HomeDir:        resolved.HomeDir,     // 运行时主目录（bind mount 目标）
-    SkillsMountPath: resolved.SkillsPath, // 由适配器决定（HomeDir 子路径）
-    // ...
-})
-
-// stdout 解析也通过适配器
-for scanner.Scan() {
-    if event := parser.ParseLine(scanner.Bytes()); event != nil {
-        // 统一处理 ParsedEvent
-    }
-}
+// stdout 解析通过 parser.ParseLine，事件统一处理
 ```
 
 ### NotificationChannelManager — 通知渠道管理器
@@ -1068,16 +772,9 @@ for scanner.Scan() {
 - 新增渠道只需注册新 Channel，不改业务代码
 - 用户通知偏好统一查询
 
-**实现**：
+**核心接口**：
 
 ```go
-// internal/notification/channel_manager.go
-package notification
-
-import (
-    "context"
-)
-
 type Event string
 
 const (
@@ -1088,16 +785,6 @@ const (
     EventNewDM             Event = "new_dm"
 )
 
-type NotifyPayload struct {
-    UserID  uint
-    Title   string
-    Body    string
-    Data    map[string]interface{}
-    GroupID uint   // 群聊系统消息用
-    Event   Event
-}
-
-// Channel 通知渠道接口
 type Channel interface {
     Name() string
     Send(ctx context.Context, userID uint, payload *NotifyPayload) error
@@ -1107,43 +794,11 @@ type ChannelManager struct {
     channels  []Channel
     userPrefs UserPreferenceService
 }
-
-func NewChannelManager(prefs UserPreferenceService) *ChannelManager {
-    return &ChannelManager{userPrefs: prefs}
-}
-
-// Register 注册渠道
-func (m *ChannelManager) Register(ch Channel) {
-    m.channels = append(m.channels, ch)
-}
-
-// Notify 统一通知入口：查询用户偏好 → 按渠道分发
-func (m *ChannelManager) Notify(ctx context.Context, payload *NotifyPayload) error {
-    prefs := m.userPrefs.GetNotificationPrefs(ctx, payload.UserID)
-    for _, ch := range m.channels {
-        if prefs.IsEnabled(ch.Name(), string(payload.Event)) {
-            ch.Send(ctx, payload.UserID, payload)
-        }
-    }
-    return nil
-}
-
-// NotifyGroup 向群聊发送系统消息（不受用户偏好控制）
-func (m *ChannelManager) NotifyGroup(ctx context.Context, groupID uint, message string) {
-    // 直接写入 messages 表 type=system
-}
+// Register 注册渠道 → Notify 查询偏好后按渠道分发
+// NotifyGroup 直接写入 messages 表（不受用户偏好控制）
 ```
 
-**渠道注册**：
-
-```go
-// 初始化
-chMgr := notification.NewChannelManager(userPrefService)
-chMgr.Register(&WebSocketChannel{hub: wsHub})
-chMgr.Register(&EmailChannel{smtp: smtpClient})
-chMgr.Register(&BrowserChannel{hub: wsHub})
-// 群聊系统消息通过 NotifyGroup 独立发送
-```
+**渠道注册**：`WebSocketChannel`、`EmailChannel`、`BrowserChannel` 三种渠道在初始化时注册。
 
 ### GitManager — Git 管理器
 
@@ -1321,29 +976,10 @@ gitMgr.Register("github", &GitHubPlatform{token: cfg.GitHubToken})
 **实现**：
 
 ```go
-// internal/token/token_manager.go
-package token
-
-import (
-    "context"
-    "fmt"
-    "time"
-
-    "github.com/redis/go-redis/v9"
-)
-
 type Usage struct {
     PromptTokens     int64
     CompletionTokens int64
     Source           string // "agent" | "opencode"
-}
-
-type DailyReport struct {
-    Date             string
-    PromptTokens     int64
-    CompletionTokens int64
-    TotalCost        float64
-    BySource         map[string]Usage
 }
 
 type TokenManager struct {
@@ -1351,49 +987,13 @@ type TokenManager struct {
     quota  QuotaService
 }
 
-func NewTokenManager(rdb *redis.Client, quota QuotaService) *TokenManager {
-    return &TokenManager{redis: rdb, quota: quota}
-}
-
-// Record 记录单次调用用量（按 Agent + 日期 + 来源聚合）
-func (m *TokenManager) Record(ctx context.Context, agentID uint, usage *Usage) {
-    key := fmt.Sprintf("tokens:agent:%d:date:%s", agentID, time.Now().Format("2006-01-02"))
-    pipe := m.redis.Pipeline()
-    pipe.HIncrBy(ctx, key, "prompt_tokens", usage.PromptTokens)
-    pipe.HIncrBy(ctx, key, "completion_tokens", usage.CompletionTokens)
-    pipe.HIncrBy(ctx, key, "source_"+usage.Source, 1)
-    pipe.Expire(ctx, key, 7*24*time.Hour)
-    pipe.Exec(ctx)
-}
-
-// CheckQuota 检查组织配额（超额返回 false）
-func (m *TokenManager) CheckQuota(ctx context.Context, orgID uint) bool {
-    limit := m.quota.GetMonthlyLimit(ctx, orgID)
-    used := m.quota.GetMonthlyUsage(ctx, orgID)
-    return used < limit
-}
-
-// GetDailyUsage 获取指定日期用量
-func (m *TokenManager) GetDailyUsage(ctx context.Context, agentID uint, date string) (*DailyReport, error) {
-    key := fmt.Sprintf("tokens:agent:%d:date:%s", agentID, date)
-    result, err := m.redis.HGetAll(ctx, key).Result()
-    if err != nil {
-        return nil, err
-    }
-    report := &DailyReport{
-        Date:     date,
-        BySource: make(map[string]Usage),
-    }
-    // 解析 result 到 report...
-    return report, nil
-}
-
-// Archive 归档到 MySQL（定时任务调用）
-func (m *TokenManager) Archive(ctx context.Context, date string) error {
-    // 扫描 tokens:agent:*:date:{date} → 写入 token_usage 表
-    return nil
-}
+func (m *TokenManager) Record(ctx context.Context, agentID uint, usage *Usage)          // Redis Hash 按 Agent+日期聚合
+func (m *TokenManager) CheckQuota(ctx context.Context, orgID uint) bool                  // 检查组织月度配额
+func (m *TokenManager) GetDailyUsage(ctx context.Context, agentID uint, date string) (*DailyReport, error)
+func (m *TokenManager) Archive(ctx context.Context, date string) error                  // 定时归档到 MySQL
 ```
+
+> 用量以 Redis Hash 聚合（key=`tokens:agent:{id}:date:{date}`），TTL 30天；定期 Archive 写入 `token_usage` 表。
 
 ### anserAgent Tool 系统（Skill 与系统通信）
 

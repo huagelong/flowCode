@@ -145,4 +145,17 @@ graph TD
 
 ---
 
-> 📌 本文档由 `05-other.md` 拆分而来 (2026-05-20)
+## 可参考项目
+
+| 项目 | 参考点 |
+|------|--------|
+| Plane (plane.so) | Issue 看板、状态流转的 UI/UX |
+| OpenHands / Devon | Agent 自动编码的沙箱架构 |
+| Mattermost | 群聊 + WebSocket 架构 |
+| Dify | Agent 工作流编排的交互设计 |
+| Eino (cloudwego/eino) | Go Agent 框架的 Graph/Workflow 模式 |
+| Asynq (hibiken/asynq) | Go 任务队列的 API 设计 |
+
+---
+
+> 📌 本文档由 `05-other.md` 拆分而来 (2026-05-20)，可参考项目章节于 2026-05-20 从 `05-other.md` 并入。
