@@ -1638,6 +1638,8 @@ func estimateCost(providerKey string, promptTokens, completionTokens int64) floa
 
 ## 七、Docker 沙箱方案
 
+> 📎 沙箱运行时接口定义（SandboxManager / RuntimeManager 适配器模式）已迁至 [04b-sandbox-runtime.md](04b-sandbox-runtime.md)。本节保留架构设计与执行流程。
+
 ### 7.0 容器与代码隔离策略
 
 本项目采用 **一个项目一个常驻容器 + 一个 Issue 一个 git worktree** 的隔离模型。

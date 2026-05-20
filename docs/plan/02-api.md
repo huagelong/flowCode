@@ -1,7 +1,5 @@
 ﻿# AnserFlow - API / Backend
 
-> 参考代码映射见 [07-architecture.md](07-architecture.md) §建议保留的模块 / 建议废弃的模块 / 建议做映射迁移的模块。
-
 ---
 
 ### 框架补充说明

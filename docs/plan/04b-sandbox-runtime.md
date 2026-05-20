@@ -303,3 +303,118 @@ parser := runtimeMgr.GetParser(runtime.Name)
 // stdout 解析通过 parser.ParseLine，事件统一处理
 
 ```
+
+---
+
+## 附录：沙箱镜像与执行细节
+
+> 以下内容从 [04-sandbox.md](04-sandbox.md) §七中提取，为沙箱执行的实现级细节。
+
+### Dockerfile
+
+位于 `docker/sandbox/Dockerfile`：
+
+```bash
+docker build -t anserflow/sandbox:latest -f docker/sandbox/Dockerfile .
+```
+
+```dockerfile
+FROM alpine:3.21
+
+RUN apk add --no-cache \
+    nodejs npm \
+    python3 py3-pip \
+    git curl bash \
+    && rm -rf /var/cache/apk/*
+
+RUN adduser -D -u 1000 sandbox
+
+RUN npm install -g opencode-ai@latest \
+    && npm cache clean --force
+
+RUN mkdir -p /workspace && chown sandbox:sandbox /workspace
+
+WORKDIR /workspace
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+USER sandbox
+ENTRYPOINT ["/entrypoint.sh"]
+```
+
+> 预估镜像大小约 400MB。`.dockerignore` 排除 node_modules/ / .git/ / dist/ / .next/ / *.log。
+
+### entrypoint.sh
+
+```bash
+# 由 Worker 传入环境变量和配置注入文件控制行为：
+#   GIT_REPO_URL / GIT_BRANCH / GITHUB_TOKEN → git clone
+#   TASK_PROMPT                              → opencode run 的 prompt 参数
+#
+# opencode 配置由 Worker 在容器启动后通过以下方式注入（每次覆盖）：
+#   ① 写入 ~/.config/opencode/config.json   → opencode 读取 provider / model 配置
+#   ② 注入环境变量                           → API Key 不落盘
+#   ③ opencode run --model provider/model    → 运行时指定模型
+```
+
+> API Key AES-256 加密存储，Worker 解密后通过环境变量注入容器。
+
+### Go Docker SDK
+
+```go
+// internal/sandbox/ — Docker SDK 核心操作
+
+func ensureProjectContainer(ctx, project, runtime) (string, error)
+//   复用已有容器 / 重启停止容器 / 创建新容器（1GB/2CPU/AutoRemove:false）
+//   首次 git clone → /workspace/main（worktree 基准）
+
+func createWorktree(ctx, containerID, issue) error
+func removeWorktree(ctx, containerID, issueID) error
+func execOpenCode(ctx, containerID, issue, task) error
+func destroyProjectSandbox(ctx, projectID, containerID) error
+```
+
+### 运行时数据目录
+
+```
+/var/lib/anserflow/               ← runtime_data_dir
+├── runtimes/                     ← Layer 1: 全局模板
+│   └── opencode/
+│       ├── skills/
+│       ├── config.json
+│       └── plugins/
+├── projects/                     ← Layer 2: 项目实例
+│   └── 42/
+│       └── runtime/
+│           ├── skills/
+│           ├── config.json
+│           └── plugins/
+沙箱容器                         ← Layer 3: bind mount
+└── /home/sandbox/.opencode/
+    ├── skills/   ← bind mount 自 projects/42/runtime/
+    ├── config.json
+    └── plugins/
+```
+
+```go
+// 项目创建时从全局模板递归复制到项目实例目录，幂等
+func initProjectRuntime(ctx, projectID, runtimeName) (string, error)
+```
+
+### GitHub SDK 集成
+
+| SDK | 用途 | 运行位置 |
+|------|------|----------|
+| **go-git** | `clone`/`commit`/`push`/`checkout` | Docker 沙箱内 |
+| **go-github/v68** | 创建 PR/Issue/Review/读取仓库 | Go 后端 Service 层 |
+
+```go
+client := github.NewClient(nil).WithAuthToken(token)
+client.Issues.Create(ctx, owner, repo, &github.IssueRequest{...})
+client.PullRequests.Create(ctx, owner, repo, &github.NewPullRequest{...})
+```
+
+**Token 权限**：`repo` + `issues:write` + `pull_requests:write`。
+
+**多平台扩展**（Phase 2）：通过 `GitPlatform` + `GitOps` 双接口抽象，支持 Gitea / GitLab / Gitee。

@@ -1,7 +1,5 @@
 # AnserFlow - 部署指南
 
-> 本文档从 `05-other.md` 十一-B 节拆分而来。
-
 ## 架构总览
 
 ```
@@ -118,6 +116,4 @@ anserflow worker --config config.yaml --mode sandbox
 4. **单二进制部署** — `admin/dist` 和 `client/dist` 通过 Go embed 打入，服务器不需要 Node.js 运行时
 5. **沙箱镜像包含双运行时** — opencode（Go 二进制）+ hermes-agent（Python pip），`ENTRYPOINT []` 由 Go Docker SDK 动态指定
 
----
 
-> 📌 本文档由 `05-other.md` 拆分而来 (2026-05-20)

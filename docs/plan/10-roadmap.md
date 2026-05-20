@@ -1,7 +1,5 @@
 # AnserFlow — 开发路线图
 
-> 本文档从 `05-other.md` 拆分而来，汇集 L1-L4 开发路线图、测试策略、数据库迁移策略与种子数据。
-
 ## L1 — 基础设施（1-2 周）
 
 | 编号 | 任务 | 验收标准 |
@@ -63,7 +61,7 @@
 | **E2E 测试** | Playwright | 关键流程：注册→登录→创建Agent→创建Issue→状态流转→邀请 | main push / 发布前 |
 | **WebSocket 测试** | `gorilla/websocket` 客户端 + testify | 消息格式 / 心跳 / 重连 / 分布式 Pub/Sub | PR |
 | **压力测试** | k6 / vegeta | WS 并发连接 > 100、API QPS > 500 | L4 阶段 |
-| **合约测试** | Pact | 前后端 API 契约一致性 | Phase 2 独立立项 |
+| **合约测试** | Pact | 前后端 API 契约一致性 | [Phase 2](11-backlog.md) 独立立项 |
 
 > **CI 闭环要求**：当前仓库需补齐 `ci.yml`，至少覆盖 Go `test + lint + build` 与 Next.js `type-check + lint + build`。
 
@@ -76,7 +74,7 @@ GORM AutoMigrate 仅处理正向迁移（创建表/添加列）。需要回滚�
 | **本地开发** | `anserflow migrate --dry-run` 预览 SQL → 手动执行回滚 DDL |
 | **生产发布** | 每次 `anserflow migrate` 前自动生成备份 SQL（`data/migrations/YYYYMMDDHHMMSS_before.sql`） |
 | **紧急回滚** | 执行对应时间的备份 SQL 恢复表结构 |
-| **当前收口** | 本轮统一采用 `AutoMigrate + 备份 SQL + 种子数据`；`golang-migrate/migrate` 放入 Phase 2 独立任务 |
+| **当前收口** | 本轮统一采用 `AutoMigrate + 备份 SQL + 种子数据`；`golang-migrate/migrate` 放入 [Phase 2](11-backlog.md) 独立任务 |
 
 ```bash
 # 迁移前自动备份
@@ -117,6 +115,4 @@ internal/seed/
 
 > 预置 Skill 仅 `anser-coder`（沙箱执行规范）。调度编排能力由 anserAgent 五层记忆系统提供，不再依赖硬编码 eino-* Skills。
 
----
 
-> 📌 本文档由 `05-other.md` 拆分而来 (2026-05-20)

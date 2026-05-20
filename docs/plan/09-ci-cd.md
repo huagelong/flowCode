@@ -1,7 +1,5 @@
 # AnserFlow — CI/CD
 
-> 本文档从 `05-other.md` 拆分而来，集中描述 GitHub Flow 分支策略与 GitHub Actions 工作流。
-
 ## GitHub Flow 分支策略
 
 AnserFlow 采用 GitHub Flow，保持主干可部署、分支短生命周期：
@@ -263,6 +261,4 @@ jobs:
 | Require conversation resolution | ✅ |
 | Do not allow bypassing | ✅ (包括 admins) |
 
----
 
-> 📌 本文档由 `05-other.md` 拆分而来 (2026-05-20)

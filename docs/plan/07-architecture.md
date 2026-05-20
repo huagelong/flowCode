@@ -215,6 +215,4 @@ graph TD
 2. **讨论先做"指令触发"**：Agent 不实时监听所有消息，通过 `/backlog` 触发，避免 Token 浪费
 3. **Skills 系统复用现有模式**：项目已有 `flowcode_design/executor/todo/wiki` Skill 定义，直接复用 YAML frontmatter + Markdown body 的格式
 
----
 
-> 📌 本文档由 `05-other.md` 拆分而来 (2026-05-20)，关键风险章节于 2026-05-20 从 `05-other.md` 并入。

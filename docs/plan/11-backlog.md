@@ -1,6 +1,6 @@
 # AnserFlow — 远期 Backlog（Phase 2+）
 
-> 本文档从 `05-other.md` 第十五章拆分而来。以下为 AnserFlow 平台远期能力规划，**不纳入当前 L1-L4 验收**。若要启动，需单独建任务并补验收标准。
+> 以下为 AnserFlow 平台远期能力规划，**不纳入当前 L1-L4 验收**。若要启动，需单独建任务并补验收标准。
 
 ## 文档生成
 
@@ -179,6 +179,4 @@ graph TD
 | Eino (cloudwego/eino) | Go Agent 框架的 Graph/Workflow 模式 |
 | Asynq (hibiken/asynq) | Go 任务队列的 API 设计 |
 
----
 
-> 📌 本文档由 `05-other.md` 拆分而来 (2026-05-20)，可参考项目章节于 2026-05-20 从 `05-other.md` 并入。
