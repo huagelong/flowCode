@@ -132,7 +132,7 @@
 
 │  调度行为由五层记忆 + L3 Skills/SOPs 驱动    │
 
-│  详见 docs/plan/06-agent.md               │
+│  详见 [06-agent.md](06-agent.md)               │
 
 └──────────────────────────────────────────┘
 
@@ -1024,7 +1024,7 @@ type ChannelManager struct {
 
 - 业务代码不感知具体平台和底层 Git 实现
 
-- Phase 2 可替换为 go-git 库实现，上层无感知
+- Phase 2 可替换为 go-git 库实现（详见 [11-backlog.md](11-backlog.md)），上层无感知
 
 **接口定义**：
 
@@ -1168,7 +1168,7 @@ func (m *GitManager) NewOps(containerID, workdir string) GitOps {
 
 | `Push` | `cd {workdir} && git push` |
 
-> Phase 2 可选替换为 `GoGitOps`（go-git 库实现），上层通过 `GitOps` 接口无感知切换。
+> Phase 2 可选替换为 `GoGitOps`（go-git 库实现，详见 [11-backlog.md](11-backlog.md)），上层通过 `GitOps` 接口无感知切换。
 
 **初始化**：
 
@@ -2574,13 +2574,13 @@ type GitPlatform interface {
 
 | **GitHub** | `go-github/v68` | 已实现 |
 
-| **Gitea** | `code.gitea.io/sdk/gitea` | Phase 2 |
+| **Gitea** | `code.gitea.io/sdk/gitea` | [Phase 2](11-backlog.md) |
 
-| **GitLab** | `github.com/xanzy/go-gitlab` | Phase 2 |
+| **GitLab** | `github.com/xanzy/go-gitlab` | [Phase 2](11-backlog.md) |
 
-| **Gitee** | REST API | Phase 2 |
+| **Gitee** | REST API | [Phase 2](11-backlog.md) |
 
-> 当前仅闭环 GitHub。仓库操作使用 `ContainerGitOps`（Shell），Phase 2 可选 `GoGitOps`（go-git）。
+> 当前仅闭环 GitHub。仓库操作使用 `ContainerGitOps`（Shell），Phase 2 可选 `GoGitOps`（go-git，详见 [11-backlog.md](11-backlog.md)）。
 
 ---
 

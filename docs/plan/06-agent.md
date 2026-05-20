@@ -776,7 +776,7 @@ CREATE TABLE skill_generation_logs (
 
 ## 九、当前阶段范围
 
-| 功能 | Phase 1（当前） | Phase 2 |
+| 功能 | Phase 1（当前） | [Phase 2](11-backlog.md) |
 |------|:---:|:---:|
 | anserAgent 内核（Eino ChatModel） | ✅ | ✅ |
 | 五层记忆（L0~L4）+ Wiki 文件存储 | ✅ | ✅ |

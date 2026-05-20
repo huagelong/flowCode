@@ -417,4 +417,4 @@ client.PullRequests.Create(ctx, owner, repo, &github.NewPullRequest{...})
 
 **Token 权限**：`repo` + `issues:write` + `pull_requests:write`。
 
-**多平台扩展**（Phase 2）：通过 `GitPlatform` + `GitOps` 双接口抽象，支持 Gitea / GitLab / Gitee。
+**多平台扩展**（[Phase 2](11-backlog.md)）：通过 `GitPlatform` + `GitOps` 双接口抽象，支持 Gitea / GitLab / Gitee。

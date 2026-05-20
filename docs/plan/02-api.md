@@ -1217,7 +1217,7 @@ erDiagram
 
 **表总数**: 23 张（含 Casbin 策略表）
 
-> **Issue 与 Todo 的关系**：Issue（执行层，粗粒度，backlog→done）可拆解为 N 个 Todo（规划层，细粒度，todo→done）。L1-L4 先闭环 Issue 流程；Todo 模块为 Phase 2 能力。
+> **Issue 与 Todo 的关系**：Issue（执行层，粗粒度，backlog→done）可拆解为 N 个 Todo（规划层，细粒度，todo→done）。L1-L4 先闭环 Issue 流程；Todo 模块为 [Phase 2](11-backlog.md) 能力。
 
 ### 9.3 邀请机制说明
 
@@ -1489,7 +1489,7 @@ func (s *Sender) SendAgentNotification(
 /invite/:token [公开]                      GET  → 查看邀请详情 → 注册/登录后接受
 ```
 
-> **图例**：无标注 = 公开端点 | `🔒` = 需 JWT 认证 | `🔐` = 需 JWT + Casbin RBAC | `[远期]` = Phase 2 实施
+> **图例**：无标注 = 公开端点 | `🔒` = 需 JWT 认证 | `🔐` = 需 JWT + Casbin RBAC | `[远期]` = [Phase 2](11-backlog.md) 实施
 
 ### 9.5.1 双人聊 API 详细说明
 
