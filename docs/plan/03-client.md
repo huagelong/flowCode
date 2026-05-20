@@ -522,14 +522,14 @@ goi18n merge active.*.json translate.*.json  # 合并新增 key
 客户端统一使用 Next.js 14 SPA（static export），浏览器直接访问，界面以 IM 聊天为核心交互模式。
 
 - **技术栈**：与 admin 一致（Next.js SPA + shadcn/ui + Tailwind CSS + TanStack Query + Zustand）
-- **核心路由**：`/dashboard`、`/projects/:id`、`/chat`、`/invite/:token`
+- **核心路由**：`/client/dashboard`、`/client/projects/:id`、`/client/chat`、`/client/invite/:token`
 - **部署方式**：Go embed 嵌入或独立部署，浏览器访问
 - **通知方式**：浏览器 Notification API + WebSocket 实时推送
 
-**`/chat` IM 四栏布局**：
+**`/client/chat` IM 四栏布局**：
 
 ```
-/chat                          ← 主聊天页面（四栏布局）
+/client/chat                   ← 主聊天页面（四栏布局）
   ① 第一栏：导航栏（窄栏，图标 + 用户头像）
     ├── 用户头像（点击进入个人中心）
     ├── 💬 聊天图标（激活第二栏为聊天视图）
@@ -548,13 +548,13 @@ goi18n merge active.*.json translate.*.json  # 合并新增 key
     ├── 我的项目列表（项目名 + 进度概要）
 
   ③ 第三栏：聊天窗口
-    /chat/:group_id            ← 选中会话后展示聊天内容
+    /client/chat/:group_id     ← 选中会话后展示聊天内容
       - 顶部：会话标题（direct: 对方昵称/Agent名称，从成员信息派生；group: 群名）
       - 中部：消息列表（复用现有 MessageList 组件）
       - 底部：输入框（条件渲染，见下方）
 
   ④ 第四栏：项目上下文面板
-    /chat/:group_id/context    ← 当前会话关联的项目信息
+    /client/chat/:group_id/context  ← 当前会话关联的项目信息
       - 项目基本情况（名称、仓库、成员）
       - 关联 Issue 列表（状态 Tab：backlog/todo/in_progress/in_review/done）
       - 参与的 Agent（角色、状态、绑定 Skill）

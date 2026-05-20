@@ -426,12 +426,20 @@ export const useCurrentOrg = create<{ orgId: string | null; setOrgId: (id: strin
 )
 
 // admin/src/lib/api.ts — 自动注入 org_id
+// 注意：仅对需要 org 作用域的 API 路径注入 org_id，
+// 排除 auth、webhook、health 等公共路径
+const ORG_SCOPED_PREFIXES = [
+  '/api/agents', '/api/projects', '/api/issues',
+  '/api/skills', '/api/settings', '/api/groups',
+]
+
 function apiFetch(path: string, init?: RequestInit) {
   const orgId = useCurrentOrg.getState().orgId
   if (!orgId) throw new Error('未选择组织')
-  const url = path.includes('/api/orgs/')
-    ? path
-    : path.replace('/api/', `/api/orgs/${orgId}/`)
+  const needsOrgScope = ORG_SCOPED_PREFIXES.some(p => path.startsWith(p))
+  const url = needsOrgScope
+    ? `/api/orgs/${orgId}${path.replace('/api', '')}`
+    : path
   return fetch(url, init)
 }
 ```
@@ -444,51 +452,4 @@ function apiFetch(path: string, init?: RequestInit) {
 ```
 
 ---
-
-## 十一、前端页面结构
-
-### 11.1 管理后台
-
-```
-/admin
-├── /login                    登录页
-├── /dashboard                仪表盘
-├── /organizations            组织管理
-│   ├── /[id]/members         成员管理 + 邀请
-│   └── /[id]/settings        组织设置
-├── /agents                   Agent 管理
-│   ├── /create               创建 Agent
-│   ├── /[id]/edit            编辑（人设/运行时/Skills）
-│   └── /[id]/logs            执行日志
-├── /skills                   Skills 管理
-│   ├── /create               手动创建
-│   ├── /import               导入 ZIP
-│   └── /[id]/edit            编辑
-├── /projects                 项目管理
-│   ├── /create               创建 + GitHub 关联(HTTP/SSH)
-│   └── /[id]/issues          Issue 状态Tab列表
-├── /conversations            会话（统一入口，混合群聊+双人聊）
-│   └── /[id]/chat            聊天界面（兼容 group 和 direct 类型）
-├── /groups                   群组管理（仅 group 类型 CRUD，不含聊天）
-└── /settings                 全局系统设置
-    ├── #general               基本信息（JWT过期/邀请默认值）
-    ├── #agent                 anserAgent 调度引擎
-    ├── #auth                  OAuth / CORS
-    ├── #smtp                  邮件服务
-    ├── #sandbox               Docker 沙箱
-    ├── #queue                 Asynq 任务队列
-    ├── #upgrade               自动更新
-    └── #runtimes              运行时管理
-        ├── 运行时列表（名称/Docker镜像/状态/适配器）
-        ├── 注册新运行时
-        │   ├── 基本信息: name / display_name / docker_image / description
-        │   ├── 执行命令模板: execute_template（支持 {model}/{prompt} 等变量）
-        │   ├── 配置 Schema: config_schema（JSON Schema，前端动态渲染表单）
-        │   ├── 默认配置: default_config
-        │   ├── 安装命令: install_cmd（空=预装在镜像中）
-        │   └── 后端适配器: 需实现 RuntimeAdapter + OutputParser 接口
-        └── 默认 Skills 绑定（如 opencode→anser-coder，内置不可关）
-```
-
-公开邀请页使用独立路由 `/invite/:token`，不挂在后台导航下；浏览器分享链接最终落到该页面。
 
