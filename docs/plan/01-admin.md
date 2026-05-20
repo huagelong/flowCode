@@ -15,7 +15,7 @@
 # config.yaml — AnserFlow 完整配置
 
 # ═══════════════════════════════════════════════════════════════
-# 🔴 基础设施（config.yaml only，改后需重启）
+# 🔴 基础设施（config.yaml only | 存 DB: ❌ | 改后重启: ✅）
 # ═══════════════════════════════════════════════════════════════
 server:
   port: 8080
@@ -47,7 +47,7 @@ redis:
   # appendfsync everysec
 
 # ═══════════════════════════════════════════════════════════════
-# 🟡 服务级（config.yaml 提供默认值，后台 /admin/settings 可覆盖）
+# 🟡 服务级（config.yaml 提供默认值，后台 /admin/settings 可覆盖 | 存 DB: ✅ | 改后重启: ❌ 即时生效）
 # ═══════════════════════════════════════════════════════════════
 jwt:
   secret: ${JWT_SECRET}          # 密钥不入库，仅 config.yaml
@@ -115,7 +115,7 @@ sandbox:                         # Docker 沙箱默认值
   runtime_data_dir: /var/lib/anserflow  # 运行时数据根目录（全局模板 + 项目实例）
 
 # ═══════════════════════════════════════════════════════════════
-# 🟢 纯后台管理（config.yaml 仅存默认值，运行时从 DB 读取）
+# 🟢 纯后台管理（config.yaml 仅存默认值，运行时从 DB 读取 | 存 DB: ✅ | 改后重启: ❌ 即时生效）
 # ═══════════════════════════════════════════════════════════════
 agent:                           # 后台 /admin/settings#agent 配置
   provider: openai
@@ -140,29 +140,17 @@ agent:                           # 后台 /admin/settings#agent 配置
 
 > **环境变量覆盖规则**：Viper 以 `AGENT_LLM_API_KEY` 覆盖 `agent.api_key`，`DB_PASSWORD` 覆盖 `database.password`。所有 `${VAR}` 占位符必须通过环境变量注入。
 
-### 全部配置归属总览
+### 配置归属速查
 
-| 配置项 | 类型 | 管理位置 | 存 DB | 改后重启 |
-|--------|------|---------|-------|---------|
-| **server** (port/mode) | 🔴 基础设施 | `config.yaml` | ❌ | ✅ 需要 |
-| **database** (host/port/user) | 🔴 基础设施 | `config.yaml` | ❌ | ✅ 需要 |
-| **redis** (host/port) | 🔴 基础设施 | `config.yaml` | ❌ | ✅ 需要 |
-| **jwt** (secret/过期) | 🟡 服务级 | `/admin/settings` → 认证 | ❌ secret / ✅ 过期 | ❌ 即时 |
-| **oauth2** (GitHub) | 🟡 服务级 | `/admin/settings` → 认证 | ✅ | ❌ 即时 |
-| **cors** | 🟡 服务级 | `/admin/settings` → 安全 | ✅ | ❌ 即时 |
-| **smtp** | 🟡 服务级 | `/admin/settings` → 邮件 | ✅ | ❌ 即时 |
-| **invite** (默认值) | 🟡 服务级 | `/admin/settings` → 邀请 | ✅ | ❌ 即时 |
-| **upgrade** | 🟡 服务级 | `/admin/settings` → 更新 | ✅ | ❌ 即时 |
-| **asynq** (并发/重试) | 🟡 服务级 | `/admin/settings` → 任务队列 | ✅ | ❌ 即时 |
-| **sandbox** (资源限制) | 🟡 服务级 | `/admin/settings` → 沙箱 | ✅ | ❌ 即时 |
-| **agent** (LLM/讨论/backlog/记忆/自改进) | 🟢 全局 | `/admin/settings` → anserAgent | ✅ | ❌ 即时 |
-| **运行时配置** (provider/model/APIKey) | 🟢 Agent 级 | `/admin/agents/{id}/edit`（根据 config_schema 动态渲染） | ✅ | ❌ 即时 |
-| **沙箱并发上限** | 🟢 组织级 | `/admin/organizations/{id}/settings` | ✅ | ❌ 即时 |
-| **Runtime 默认 Skills** | 🟢 Runtime 级 | `/admin/settings#runtimes/{id}/skills` | ✅ | ❌ 即时 |
-| **Skills 管理** | 🟢 全局/组织级 | `/admin/skills` | ✅ | ❌ 即时 |
-| **invite 链接有效期** | 🟢 组织级 | `/admin/organizations/{id}/settings` | ✅ | ❌ 即时 |
-| **通知偏好** | 🟢 用户级 | `/admin/user/settings` | ✅ | ❌ 即时 |
-| **主题/语言** | 🟢 用户级 | 客户端 localStorage + `users.locale` | ✅ | ❌ 即时 |
+> 各配置项的归属/DB/重启信息已内嵌在上方 `config.yaml` 的三色注释中，此处仅列管理层级概览。
+
+| 层级 | 管理入口 | 示例 |
+|------|---------|------|
+| 🔴 基础设施 | `config.yaml` only | server / database / redis |
+| 🟡 服务级 | `/admin/settings`（覆盖 config.yaml 默认值） | jwt / smtp / sandbox / asynq |
+| 🟢 Agent 级 | `/admin/agents/{id}/edit` | provider / model / APIKey |
+| 🟢 组织级 | `/admin/organizations/{id}/settings` | 沙箱并发上限 / invite 有效期 |
+| 🟢 用户级 | `/admin/user/settings` + localStorage | 通知偏好 / 主题 / 语言 |
 
 ### 配置热更新机制
 

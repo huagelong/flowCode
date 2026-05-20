@@ -17,7 +17,7 @@
 1. 当前交付只以 **L1-L4 路线图**（见 [10-roadmap.md](10-roadmap.md)）为验收范围；远期规划统一归入 [11-backlog.md](11-backlog.md)，不计入本轮完成标准。
 2. 当前 Git 平台只验收 **GitHub**；`git_platform` 仅保留数据模型兼容位，不要求本轮实现 Gitea / GitLab。
 3. 当前前端交付闭环 **admin SPA 嵌入 Go** 与 **客户端 Web SPA（IM 聊天界面）**；统一使用 Next.js SPA 技术栈，浏览器访问。
-4. 当前客户端闭环 **Web 端**；Crowdin / Lokalise、Pact 合约测试、`golang-migrate`、文档自动生成与 wiki 拆分均归入 Phase 2。
+4. 当前客户端闭环 **Web 端**；Crowdin / Lokalise、Pact 合约测试、`golang-migrate`、文档自动生成与 wiki 拆分均归入 Phase 2，详见 [11-backlog.md](11-backlog.md)。
 5. 文中的目录树、接口、伪代码和工作流若未在仓库中落地，默认按 **目标架构说明** 理解。
 
 ---
@@ -56,20 +56,6 @@
 - `internal/app/execution/` → `internal/agent/` + `internal/status/` + `internal/worker/` + `internal/runtime/`
 - `internal/transport/http/` → 正式 handler/router/middleware
 - `internal/store/gormstore/` → 需补索引策略、分页、批处理、事务事件、审计字段
-
-### 当前最关键的未覆盖模块
-
-- `internal/agent/` — Agent 编排
-- `internal/runtime/` — 运行时管理
-- `internal/sandbox/` — Docker 沙箱
-- `internal/git/` — Git 管理
-- `internal/status/` — 状态机
-- `internal/notification/` — 通知
-- `internal/token/` — Token 配额
-- `internal/ws/` — WebSocket
-- `internal/scheduler/` — 调度器
-- `internal/worker/` — Worker
-- `internal/middleware/` — 中间件
 
 ### 结论
 

@@ -70,7 +70,7 @@ func (h *AuthHandler) GitHubCallback(c *gin.Context) {
 
 #### 后端：go-i18n 错误码映射实现
 
-后端 API 返回统一的国际化错误码，前端根据当前 locale 映射为对应语言文案。
+后端 API 返回统一的国际化错误码，前端根据当前 locale 映射为对应语言文案。前端 i18n（next-intl）方案详见 [03-client.md §国际化](03-client.md)。
 
 **错误码枚举**（完整清单）：
 

@@ -145,6 +145,29 @@ graph TD
 
 ---
 
+## 工程基础设施（Phase 2）
+
+以下项目在 L1-L4 中已评估，归入 Phase 2 独立立项：
+
+### Pact 合约测试
+
+前后端 API 契约一致性校验，当前用 TypeScript interface + Go struct 手工对齐。
+
+| 项目 | 说明 |
+|------|------|
+| 触发时机 | 前后端 API 变更时 CI 自动运行 |
+| 参考方案 | Pact Broker + `@pact-foundation/pact` (JS) + `pact-go` |
+
+### golang-migrate 迁移工具
+
+当前 L1-L4 采用 `AutoMigrate + 备份 SQL + 种子数据`。Phase 2 切换为 `golang-migrate/migrate` 以支持版本化迁移和回滚。
+
+### Crowdin / Lokalise 翻译管理
+
+当前 L1-L4 手动编辑 JSON/TOML 翻译文件 + `goi18n merge`。如翻译量明显增加，Phase 2 接入 Crowdin 或 Lokalise 实现翻译协作和 CI 自动同步。
+
+---
+
 ## 可参考项目
 
 | 项目 | 参考点 |
