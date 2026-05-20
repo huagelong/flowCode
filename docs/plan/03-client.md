@@ -254,7 +254,7 @@ src/
 
 #### @anserflow/shared-ui 公共组件
 
-admin 和 client 共享的公共组件、Hooks、工具函数、类型定义统一放在 `packages/shared-ui/`，通过 npm workspace 引用。详细目录结构和使用对照表见 [05-other.md 第十节](05-other.md)。
+admin 和 client 共享的公共组件、Hooks、工具函数、类型定义统一放在 `packages/shared-ui/`，通过 npm workspace 引用。
 
 ```tsx
 // 引用示例
