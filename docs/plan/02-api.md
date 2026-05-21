@@ -5,6 +5,8 @@
 ## 框架补充说明
 
 > 以下为生产级 Gin 项目的标准配套设施，确保系统可维护、可观测、可扩展。
+>
+> **实现代码**：本文档中的实现级代码示例已外提至 [backend-code-examples.md](../../reference/backend-code-examples.md)，文中通过链接引用。
 
 | 框架/库 | 用途 | 配置要点 |
 |---------|------|----------|
@@ -48,23 +50,7 @@ GET /api/auth/github/login  → 302 跳转 GitHub
 
 **非 GitHub 用户的注册兼容**：支持传统邮箱+密码注册（通过 `/api/auth/register` / `/api/auth/login`），与 OAuth 用户共用 `users` 表，`password_hash` 为 NULL 表示仅 OAuth 登录。
 
-```go
-// internal/handler/auth.go
-func (h *AuthHandler) GitHubCallback(c *gin.Context) {
-    code := c.Query("code")
-    // 1. code → access_token
-    token, _ := h.oauth.Exchange(ctx, code)
-    // 2. access_token → GitHub user info
-    ghUser, _ := h.oauth.GetUser(ctx, token)
-    // 3. 查找或创建用户
-    user := h.userRepo.FindOrCreateByGitHub(ghUser)
-    // 4. 生成 JWT
-    jwtToken, _ := h.jwtService.Generate(user.ID)
-    // 5. 重定向到前端（URL 参数携带 JWT）
-    c.Redirect(http.StatusFound,
-        fmt.Sprintf("/admin/dashboard?token=%s", jwtToken))
-}
-```
+**实现代码**: [backend-code-examples.md §OAuth2](../../reference/backend-code-examples.md#oauth2--github-第三方登录)
 
 #### 后端：go-i18n 错误码映射实现
 
@@ -96,101 +82,11 @@ func (h *AuthHandler) GitHubCallback(c *gin.Context) {
 
 **Gin 错误响应中间件**：
 
-```go
-// internal/middleware/i18n_error.go
-package middleware
-
-import (
-    "net/http"
-    "github.com/BurntSushi/toml"
-    "github.com/nicksnyder/go-i18n/v2/i18n"
-    "golang.org/x/text/language"
-    "github.com/gin-gonic/gin"
-)
-
-var bundle *i18n.Bundle
-
-func InitI18n() {
-    bundle = i18n.NewBundle(language.English)
-    bundle.RegisterUnmarshalFunc("toml", toml.Unmarshal)
-    bundle.MustLoadMessageFile("locales/active.en.toml")
-    bundle.MustLoadMessageFile("locales/active.zh-CN.toml")
-}
-
-// APIError 统一错误响应结构
-type APIError struct {
-    Code    string `json:"code"`    // 错误码（如 ERR_ISSUE_NOT_FOUND）
-    Message string `json:"message"` // 当前 locale 的文案
-}
-
-// RespondError 返回国际化错误响应
-func RespondError(c *gin.Context, statusCode int, errorCode string, templateData map[string]interface{}) {
-    // 确定 locale：优先用户设置 → Accept-Language 头 → 默认 en
-    locale := getUserLocale(c)
-    localizer := i18n.NewLocalizer(bundle, locale)
-
-    msg, err := localizer.Localize(&i18n.LocalizeConfig{
-        MessageID:    errorCode,
-        TemplateData: templateData,
-    })
-    if err != nil {
-        msg = errorCode // fallback 到错误码本身
-    }
-
-    c.JSON(statusCode, APIError{Code: errorCode, Message: msg})
-    c.Abort()
-}
-
-func getUserLocale(c *gin.Context) string {
-    // 优先级：已登录用户 users.locale > Accept-Language > 默认 en
-    if userLocale, exists := c.Get("user_locale"); exists {
-        return userLocale.(string)
-    }
-    acceptLang := c.GetHeader("Accept-Language")
-    if strings.HasPrefix(acceptLang, "zh") {
-        return "zh-CN"
-    }
-    return "en"
-}
-```
+**实现代码**: [backend-code-examples.md §i18n 中间件](../../reference/backend-code-examples.md#gin-错误响应中间件)
 
 **翻译文件示例**：
 
-```toml
-# locales/active.zh-CN.toml
-[ERR_ISSUE_NOT_FOUND]
-other = "Issue #{{.IssueID}} 不存在"
-
-[ERR_VALIDATION_FAILED]
-other = "请求参数校验失败: {{.Detail}}"
-
-[ERR_PERMISSION_DENIED]
-other = "权限不足，无法执行此操作"
-
-[ERR_ORG_LIMIT_EXCEEDED]
-other = "组织 {{.OrgName}} 并发 Agent 数已达上限 ({{.Max}})，请等待或提升限额"
-
-[ERR_SANDBOX_TIMEOUT]
-other = "Docker 沙箱执行超时（超过 {{.Timeout}} 秒）"
-```
-
-```toml
-# locales/active.en.toml
-[ERR_ISSUE_NOT_FOUND]
-other = "Issue #{{.IssueID}} not found"
-
-[ERR_VALIDATION_FAILED]
-other = "Validation failed: {{.Detail}}"
-
-[ERR_PERMISSION_DENIED]
-other = "Permission denied"
-
-[ERR_ORG_LIMIT_EXCEEDED]
-other = "Organization {{.OrgName}} has reached the max concurrent agent limit ({{.Max}}). Please wait or upgrade."
-
-[ERR_SANDBOX_TIMEOUT]
-other = "Docker sandbox execution timed out (exceeded {{.Timeout}} seconds)"
-```
+**翻译文件**: [backend-code-examples.md §翻译文件](../../reference/backend-code-examples.md#翻译文件示例)
 
 > **前端消费**：前端 `apiFetch` 封装层拦截 APIError，根据 `code` 从 `messages/{locale}.json` 的 `Errors` 段读取对应文案作为 fallback。后端错误码优先显示，前端翻译仅为降级兜底。
 
@@ -374,75 +270,14 @@ func (h *Hub) SendToUser(userID uint, msg interface{}) {
 
 Hub 的 `OnMessage` 入口统一根据 `HasAgentMember()` 决定是否触发 anserAgent 编排，`commandHandler` 独立调用以确保 `/new` 全模式可用（`/backlog` 和 `/todo` 仅含 Agent 时可用）：
 
-```go
-func (h *Hub) OnMessage(msg *Message) {
-    group := h.groupRepo.FindByID(msg.GroupID)
-
-    // ① 分配服务端 seq（全局递增，用于排序和断线续传）
-    msg.Seq = h.seqCounter.Incr()
-
-    // ② 指令消息：标记为 command 类型后持久化+广播，不进入 anserAgent 编排
-    if isCommand(msg.Content.Text) {
-        originalText := msg.Content.Text
-        msg.Type = "command"
-        h.persistAndBroadcast(msg)            // 以 command 类型广播，前端可选择性展示
-        h.commandHandler.OnMessage(msg, group) // 处理指令逻辑
-        return                                 // ← 提前返回，不触发 anserAgent 编排
-    }
-
-    // ③ 非指令消息：正常持久化+广播
-    h.persistAndBroadcast(msg)
-
-    if group.HasAgentMember() {
-        // 有 Agent 成员：触发 anserAgent 编排
-        // 适用：群聊含 Agent、双人聊（人+Agent）
-        h.orchestrator.OnMessage(msg)      // Agent 编排
-    } else {
-        // 无 Agent 成员：纯自然人聊天，不触发 anserAgent
-        // 适用：群聊无 Agent、双人聊（人+人）
-        // 仅通知未连接该会话 WS 的离线成员
-        h.notifyOfflineMembers(msg)
-    }
-}
-
-// isCommand 判断是否为指令消息（以 / 开头）
-func isCommand(text string) bool {
-    return strings.HasPrefix(text, "/new") ||
-        strings.HasPrefix(text, "/todo") ||
-        strings.HasPrefix(text, "/backlog")
-}
-```
+**Hub 消息路由实现**: [backend-code-examples.md §WebSocket](../../reference/backend-code-examples.md#websocket-分布式架构)
 
 > **设计说明**：
 > - `HasAgentMember()` 查询 `group_members` 表中是否存在 `member_type = 'agent'` 的记录，结果可在 Hub 连接生命周期内缓存，无需每次消息都查库。
 > - **指令消息以 `command` 类型广播后立即返回**，避免同时触发 anserAgent 编排导致 Agent 重复响应。CommandHandler 内部根据 `HasAgentMember()` 决定 `/backlog` 和 `/todo` 是否可用，但 `/new` 在所有模式下均可用（会话上下文隔离对所有场景都有意义）。
 > - `seq` 由服务端统一分配（Redis INCR `ws:seq:global`），客户端不参与序号生成，避免多客户端 seq 冲突。
 
-```go
-// CommandHandler 内部分发逻辑
-func (h *CommandHandler) OnMessage(msg *Message, group *Group) {
-    if strings.HasPrefix(msg.Content.Text, "/new") {
-        h.HandleNewSession(msg)            // 全模式可用
-        return
-    }
-    if strings.HasPrefix(msg.Content.Text, "/todo") {
-        if !group.HasAgentMember() {
-            h.ws.Reply(msg, "需要 Agent 参与才能使用 /todo 功能")
-            return
-        }
-        h.HandleBacklog(msg, "todo")       // 复用 anserAgent 编排，Issue 状态直接为 todo
-        return
-    }
-    if strings.HasPrefix(msg.Content.Text, "/backlog") {
-        if !group.HasAgentMember() {
-            h.ws.Reply(msg, "需要 Agent 参与才能使用 /backlog 功能")
-            return
-        }
-        h.HandleBacklog(msg, "backlog")    // anserAgent 编排，Issue 状态为 backlog
-        return
-    }
-}
-```
+**CommandHandler 实现**: [backend-code-examples.md §WebSocket](../../reference/backend-code-examples.md#websocket-分布式架构)
 
 **Agent 编排判断规则**：
 
@@ -462,41 +297,7 @@ func (h *CommandHandler) OnMessage(msg *Message, group *Group) {
 
 用户在群聊中对 `/backlog` 方案进行确认或拒绝，Hub 收到 `backlog_ack` 消息后触发状态流转：
 
-```go
-// Hub.OnMessage 中的 backlog_ack 处理（在指令消息判断之前）
-if msg.Type == "backlog_ack" {
-    h.handleBacklogAck(msg)
-    return // 控制信令，不持久化、不广播、不触发编排
-}
-
-func (h *Hub) handleBacklogAck(msg *Message) {
-    accepted := msg.Content["accepted"].(bool)
-    issueID := uint(msg.Content["issue_id"].(float64)) // 前端发送关联的 Issue ID
-
-    issue, _ := h.issueRepo.FindByID(issueID)
-    if issue.Status != "backlog" {
-        h.ws.Reply(msg, "该 Issue 已不在 backlog 状态")
-        return
-    }
-
-    if accepted {
-        // 确认：backlog → todo
-        h.statusMgr.Transition(context.Background(), issueID, "backlog", "todo")
-        h.ws.SendToGroup(msg.GroupID, map[string]interface{}{
-            "type":    "system",
-            "content": map[string]interface{}{"text": fmt.Sprintf("Issue #%d 已确认为 todo，等待调度执行", issueID)},
-        })
-    } else {
-        // 拒绝：标记拒绝原因，Issue 保持 backlog（可编辑后重新确认）
-        h.timelineRepo.Append(issueID, "system", "backlog_rejected", "backlog", "backlog",
-            fmt.Sprintf("方案被拒绝：%s", msg.Content["reason"]))
-        h.ws.SendToGroup(msg.GroupID, map[string]interface{}{
-            "type":    "system",
-            "content": map[string]interface{}{"text": fmt.Sprintf("Issue #%d 方案已拒绝，可编辑后重新确认", issueID)},
-        })
-    }
-}
-```
+**backlog_ack 处理实现**: [backend-code-examples.md §WebSocket](../../reference/backend-code-examples.md#websocket-分布式架构)
 
 > **前端交互**：`/backlog` 指令产出方案后，群聊中展示 Issue 卡片 + [确认] [拒绝] 按钮。用户点击后发送 `backlog_ack` 消息。确认后 Issue 进入 `todo` 状态，调度器自动拾取执行。
 
@@ -504,42 +305,7 @@ func (h *Hub) handleBacklogAck(msg *Message) {
 
 断线重连时客户端通过 `seq` 号请求遗漏消息。为减少 MySQL 查询压力，在 Redis 中维护每个频道的最近消息滑动窗口：
 
-```go
-// 消息写入时双写
-func (h *Hub) persistAndBroadcast(msg *Message) {
-    // 1. 持久化到 MySQL（仅需要持久化的类型）
-    if shouldPersist(msg.Type) {
-        h.repo.InsertMessage(ctx, msg)
-    }
-
-    // 2. 服务端分配 seq
-    msg.Seq = h.seqCounter.Incr() // Redis INCR ws:seq:global
-
-    // 3. 写入 Redis 滑动缓存（ZSET，按 seq 排序）
-    channel := msg.Channel // 如 "group:42"
-    key := fmt.Sprintf("msg:cache:%s", channel)
-    h.redis.ZAdd(ctx, key, redis.Z{
-        Score:  float64(msg.Seq),
-        Member: msg.JSON(),
-    })
-    h.redis.Expire(ctx, key, 24*time.Hour) // 续期 TTL
-    // 4. 裁剪：仅保留最近 500 条（超出则移除最旧）
-    h.redis.ZRemRangeByRank(ctx, key, 0, -501)
-
-    // 5. 广播到频道
-    h.SendToChannel(channel, msg)
-}
-
-// shouldPersist 判断消息类型是否需要持久化
-func shouldPersist(msgType string) bool {
-    switch msgType {
-    case "message", "system", "annotation", "backlog", "todo", "new_session", "command":
-        return true
-    default:
-        return false // typing/ping/pong/subscribe/unsubscribe/backlog_ack/native_notification 不持久化
-    }
-}
-```
+**Redis 消息缓存实现**: [backend-code-examples.md §WebSocket](../../reference/backend-code-examples.md#websocket-分布式架构)
 
 | 参数 | 值 | 理由 |
 |------|-----|------|
@@ -609,67 +375,19 @@ Asynq 核心特性：
 
 系统的调度器作为一个轻量的 Gin 后台协程运行，与 Asynq Worker 解耦：
 
-```go
-// internal/scheduler/issue_scheduler.go
-func (s *IssueScheduler) Run(ctx context.Context) {
-    ticker := time.NewTicker(5 * time.Second)
-    for {
-        select {
-        case <-ticker.C:
-            // ① 扫描所有 org 的 todo Issue，按优先级 ASC + 创建时间 ASC
-            issues := s.repo.FindSchedulableIssues(ctx)
-            for _, issue := range issues {
-                // ② 检查该 org 是否达到并发上限（默认 3 个 Agent 同时执行）
-                if s.runningCount(issue.OrgID) >= s.maxConcurrent(issue.OrgID) {
-                    continue
-                }
-                // ③ 状态 → in_progress + 写入时间线
-                s.repo.TransitionStatus(issue.ID, "todo", "in_progress")
-                s.timelineRepo.Append(issue.ID, "system", "status_change",
-                    "todo", "in_progress", "调度器自动分配执行")
-                // ④ 入队 Asynq
-                s.asynqClient.Enqueue(issue)
-                s.ws.NotifyProject(issue.ProjectID, "Issue #%d 开始执行", issue.ID)
-            }
-        case <-ctx.Done():
-            return
-        }
-    }
-}
-```
+**调度器实现**: [backend-code-examples.md §任务队列](../../reference/backend-code-examples.md#任务队列asynq)
 
 > 每个组织默认最多 3 个 Agent 同时执行（可通过 org settings 调整），超过上限的 Issue 保持 todo 等待。
 
 并发统计直接查询 `issues` 表，无需额外 Redis 计数器：
 
-```go
-func (s *IssueScheduler) runningCount(orgID uint) int {
-    var count int64
-    s.db.Model(&Issue{}).
-        Joins("JOIN projects ON projects.id = issues.project_id").
-        Where("projects.org_id = ? AND issues.status = ?", orgID, "in_progress").
-        Count(&count)
-    return int(count)
-}
-```
+**并发统计实现**: [backend-code-examples.md §任务队列](../../reference/backend-code-examples.md#任务队列asynq)
 
 #### 调度器对 paused 状态的处理
 
 调度器扫描可调度 Issue 时**明确跳过 `paused` 状态**，避免重复入队：
 
-```go
-// internal/scheduler/issue_scheduler.go — 查询条件
-func (r *IssueRepo) FindSchedulableIssues(ctx context.Context) ([]*Issue, error) {
-    var issues []*Issue
-    return issues, r.db.WithContext(ctx).
-        Joins("JOIN projects ON projects.id = issues.project_id").
-        Where("issues.status = ?", "todo").           // 仅 todo 状态
-        Where("issues.retry_count < 3").               // 重试未耗尽
-        Where("issues.assignee_role = ?", "agent").    // 仅 Agent 负责
-        Order("FIELD(issues.priority, 'p0','p1','p2','p3','p4') ASC, issues.created_at ASC").
-        Find(&issues).Error
-}
-```
+**调度器查询实现**: [backend-code-examples.md §任务队列](../../reference/backend-code-examples.md#任务队列asynq)
 
 > 调度器只扫 `todo`，不会扫到 `paused`。`paused` 状态的 Issue 由 Worker 心跳循环自行管理，与调度器完全解耦。
 
@@ -700,47 +418,11 @@ ALTER TABLE issues ADD COLUMN retry_count INT DEFAULT 0;
 
 **执行失败时递增**：
 
-```go
-// internal/worker/executor.go — opencode 失败处理
-func (w *Worker) handleCompletion(ctx context.Context, issueID uint, containerID string, exitCode int) {
-    if exitCode != 0 {
-        issue, _ := w.issueRepo.FindByID(issueID)
-        newCount := issue.RetryCount + 1
-
-        if newCount >= 3 {
-            // 重试耗尽 → 回退 backlog，销毁沙箱，通知人工
-            w.issueRepo.UpdateStatus(issueID, "backlog")
-            w.issueRepo.UpdateRetryCount(issueID, newCount)
-            w.cli.ContainerRemove(ctx, containerID, container.RemoveOptions{Force: true})
-            w.issueRepo.ClearContainerID(issueID)
-            w.timelineRepo.Append(issueID, "system", "status_change",
-                "in_progress", "backlog",
-                fmt.Sprintf("重试 %d 次仍失败，已自动回退到 backlog，请人工检查", newCount))
-            w.notification.NotifyIssueStatusChanged(ctx, issue, issue.CreatedBy)
-            return
-        }
-
-        // 仍有重试配额 → 回到 todo，保留沙箱
-        w.issueRepo.UpdateStatus(issueID, "todo")
-        w.issueRepo.UpdateRetryCount(issueID, newCount)
-        w.timelineRepo.Append(issueID, "system", "status_change",
-            "in_progress", "todo",
-            fmt.Sprintf("第 %d 次执行失败，等待人工提示词后重试", newCount))
-    }
-}
-```
+**重试处理实现**: [backend-code-examples.md §任务队列](../../reference/backend-code-examples.md#任务队列asynq)
 
 **人工确认重置**（仅当用户手动点击 [转为 todo] 时重置）：
 
-```go
-// internal/service/issue_service.go
-func (s *IssueService) TransitionToTodo(ctx context.Context, issueID uint) error {
-    return s.repo.Update(ctx, issueID, map[string]interface{}{
-        "status":      "todo",
-        "retry_count": 0,                        // 人工确认后重置
-    })
-}
-```
+**人工确认重置实现**: [backend-code-examples.md §任务队列](../../reference/backend-code-examples.md#任务队列asynq)
 
 > **防护效果**：同一 Issue 最多经历 3 次自动重试循环（`todo → in_progress → 失败 → todo`），第 4 次自动回退 `backlog` 并通知人工介入。仅人工确认后重置 `retry_count`。
 
@@ -820,23 +502,7 @@ AnserFlow 采用双层 RBAC 模型：**系统级角色** + **组织级角色**�
 
 Casbin 使用 `(sub, obj, act)` 模型：`主体 + 资源 + 操作`。
 
-```ini
-# config/rbac_model.conf
-[request_definition]
-r = sub, obj, act
-
-[policy_definition]
-p = sub, obj, act
-
-[role_definition]
-g = _, _
-
-[policy_effect]
-e = some(where (p.eft == allow))
-
-[matchers]
-m = g(r.sub, p.sub) && keyMatch(r.obj, p.obj) && regexMatch(r.act, p.act)
-```
+**Casbin 配置**: [backend-code-examples.md §RBAC](../../reference/backend-code-examples.md#rbac-权限管理)
 
 | 资源 (obj) | 操作 (act) | owner | admin | member |
 |-----------|-----------|-------|-------|--------|
