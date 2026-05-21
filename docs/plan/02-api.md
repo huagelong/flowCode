@@ -1820,15 +1820,15 @@ sequenceDiagram
     end
 
     Note over W,GH: ④ anserAgent 自检查 → PR
-    W->>D: opencode 返回执行结果
+    W->>D: anserAgent 返回执行结果
     W->>W: 检查结果（代码完整性/lint/test 通过）
-    alt opencode 检查通过
+    alt anserAgent 检查通过
         W->>D: git add → commit → push
         W->>GH: 创建 Pull Request
         W->>ISS: 更新 Issue status → in_review + 写入 pr_url
         W->>WS: 推送通知 "PR 已提交，等待审核"
         W->>G: 系统消息: "Issue #1 PR 已提交，等待审核"
-    else opencode 检查失败
+    else anserAgent 检查失败
         W->>ISS: 写入失败原因到时间线
         W->>ISS: Issue 状态 → todo（保留沙箱）
         W->>WS: 推送 "执行失败: {原因}，等待人工介入"
@@ -1837,7 +1837,7 @@ sequenceDiagram
         ISS->>ISS: 收到人工提示词 → Issue → in_progress
         ISS->>Q: enqueue("agent:execute", {issue_id, human_prompts_optimized})
         W->>Q: dequeue → 检测已有沙箱 → 复用旧沙箱
-        W->>D: 注入新的优化提示词 → opencode run（基于上次工作区继续）
+        W->>D: 注入新的优化提示词 → anserAgent run（基于上次工作区继续）
     end
 
     Note over H,GH: ⑤ PR 审核 → merge → done
@@ -1856,18 +1856,18 @@ sequenceDiagram
 |------|---------|---------|---------|
 | `backlog` | `/backlog` 指令自动创建 | `todo` | **人工点击 [转为 todo] 按钮** |
 | `todo` | 人工从 backlog 转为 todo | `in_progress` | 系统自动调度（按优先级+排队顺序） |
-| `in_progress` | 系统自动 | `in_review` | opencode 检查通过 + PR 创建成功 |
+| `in_progress` | 系统自动 | `in_review` | anserAgent 检查通过 + PR 创建成功 |
 | `in_progress` | 系统自动 | `paused` | 人工点击 [暂停] |
-| `in_progress` | 系统自动 | `backlog` | 人工点击 [停止]（终止 opencode 进程，worktree 保留） |
-| `paused` | 人工暂停 | `in_progress` | 人工点击 [恢复]（SIGCONT 恢复 opencode 进程） |
-| `paused` | 人工暂停 | `backlog` | 人工点击 [停止]（终止 opencode 进程，worktree 保留） |
-| `in_progress` | 系统自动 / 人工恢复 | `todo` | opencode 检查失败 → 保留 worktree → 等待人工提示词 |
-| `in_review` | opencode 检查通过后 | `done` | GitHub Webhook 通知 PR 已 merge → git worktree remove |
-| `in_review` | opencode 检查通过后 | `todo` | PR 被拒绝 → 人工追加提示词 → Eino 优化 → 复用 worktree 重新执行 |
+| `in_progress` | 系统自动 | `backlog` | 人工点击 [停止]（终止 anserAgent 进程，worktree 保留） |
+| `paused` | 人工暂停 | `in_progress` | 人工点击 [恢复]（SIGCONT 恢复 anserAgent 进程） |
+| `paused` | 人工暂停 | `backlog` | 人工点击 [停止]（终止 anserAgent 进程，worktree 保留） |
+| `in_progress` | 系统自动 / 人工恢复 | `todo` | anserAgent 检查失败 → 保留 worktree → 等待人工提示词 |
+| `in_review` | anserAgent 检查通过后 | `done` | GitHub Webhook 通知 PR 已 merge → git worktree remove |
+| `in_review` | anserAgent 检查通过后 | `todo` | PR 被拒绝 → 人工追加提示词 → Eino 优化 → 复用 worktree 重新执行 |
 
 **人工提示词介入机制**：
 
-Issue 的时间线面板允许自然人在任意阶段追加提示词，直接干预 opencode 的下一步执行：
+Issue 的时间线面板允许自然人在任意阶段追加提示词，直接干预 anserAgent 的下一步执行：
 
 ```
 ┌─────────────────────────────────────────────────────────┐
