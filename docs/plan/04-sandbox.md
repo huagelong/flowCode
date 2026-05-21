@@ -1640,7 +1640,7 @@ func estimateCost(providerKey string, promptTokens, completionTokens int64) floa
 
 > 📎 沙箱运行时接口定义（SandboxManager / RuntimeManager 适配器模式）已迁至 [04b-sandbox-runtime.md](04b-sandbox-runtime.md)。本节保留架构设计与执行流程。
 
-### 7.0 容器与代码隔离策略
+### 2.0 容器与代码隔离策略
 
 本项目采用 **一个项目一个常驻容器 + 一个 Issue 一个 git worktree** 的隔离模型。
 
@@ -1742,7 +1742,7 @@ docker exec anserflow-project-1 git branch -D feat/issue-42
 
 ---
 
-### 7.1 执行流程
+### 2.1 执行流程
 
 每个 Issue 在**项目常驻容器**内通过**独立 git worktree** 执行，多 Issue 并发互不干扰：
 
@@ -1868,7 +1868,7 @@ docker exec anserflow-project-1 git branch -D feat/issue-42
 
 ```
 
-### 7.1.1 沙箱 ↔ 系统消息互通闭环
+### 2.1.1 沙箱 ↔ 系统消息互通闭环
 
 opencode 通过 **docker exec 的 stdout 流 + 退出码** 与 Worker 通信，Worker 负责解析、存储、推送：
 
@@ -1946,7 +1946,7 @@ exit 0                              │ 检查: 退出码=0                 │
 
 | opencode → Worker | Exit Code | 0=成功, 非0=失败 | 结束时 1 次 |
 
-### 7.1.2 执行控制（暂停 / 恢复 / 停止）
+### 2.1.2 执行控制（暂停 / 恢复 / 停止）
 
 Worker 监听 Issue 控制命令，通过 Docker API 直接操作沙箱容器：
 
@@ -2136,7 +2136,7 @@ Worker 启动
 
 > - **issuess 表不再有 sandbox_container_id 字段**：改为通过 `project_id → projects.sandbox_container_id` 间接获取
 
-### 7.2 安全策略
+### 2.2 安全策略
 
 | 策略 | 配置 |
 
@@ -2156,7 +2156,7 @@ Worker 启动
 
 | 镜像最小化 | Alpine 3.21 基础，预装 Node/Python/Git/opencode，不含 Go 运行时 |
 
-### 7.2.1 数据持久化保障
+### 2.2.1 数据持久化保障
 
 服务器重启、Worker 进程崩溃等异常场景下的数据保护：
 
@@ -2296,11 +2296,11 @@ ENTRYPOINT ["/entrypoint.sh"]
 
 ```
 
-> **opencode 配置注入**：已由 `RuntimeAdapter` 接口替代（见 §六 RuntimeManager）。API Key AES-256 加密存储，Worker 解密后通过环境变量注入容器，不落盘。
+> **opencode 配置注入**：已由 `RuntimeAdapter` 接口替代（见 [04b-sandbox-runtime.md](04b-sandbox-runtime.md) §RuntimeManager）。API Key AES-256 加密存储，Worker 解密后通过环境变量注入容器，不落盘。
 
 > 预估镜像大小约 400MB。`.dockerignore` 排除 node_modules/ / .git/ / dist/ / .next/ / *.log。
 
-### 7.3 Go Docker SDK
+### 2.3 Go Docker SDK
 
 使用官方 `github.com/docker/docker/client`：
 
@@ -2324,7 +2324,7 @@ func destroyProjectSandbox(ctx, projectID, containerID) error // ContainerRemove
 
 ```
 
-### 7.3.1 运行时数据目录 — 三层架构
+### 2.3.1 运行时数据目录 — 三层架构
 
 ```
 
@@ -2420,7 +2420,7 @@ func destroyWorkspaceVolume(ctx context.Context, projectID uint) error {
 
 ```
 
-### 7.4 GitHub SDK 集成
+### 2.4 GitHub SDK 集成
 
 Git 操作与 GitHub API 分别使用两套 Go SDK，职责分离：
 
@@ -2586,113 +2586,67 @@ type GitPlatform interface {
 
 ## 三、Skills 技能系统
 
-### 8.1 两种导入方式
+### 3.1 两种导入方式
 
 ```
-
 Skills 数据表：
-
 ┌──────────────────────────────────────────────┐
-
 │ skills                                        │
-
 ├──────────────────────────────────────────────┤
-
 │ source_type:  'manual' | 'zip'                │
-
 │                                             │
-
 │ 手动模式 (source_type='manual'):              │
-
 │   definition: TEXT  ← 直接在 UI 编辑 Markdown │
-
 │                                             │
-
 │ ZIP 模式 (source_type='zip'):                 │
-
 │   zip_hash: VARCHAR(64)   ← ZIP 包 SHA256    │
-
 │   file_tree: JSON          ← 文件树快照       │
-
 │   definition: TEXT         ← 解压后的 SKILL.md│
-
 └──────────────────────────────────────────────┘
-
 ```
 
-### 8.2 ZIP 包格式
+### 3.2 ZIP 包格式
 
 ```
-
 my-skill.zip
-
 ├── SKILL.md              # 必须：Skill 定义
-
 │                         #   ---
-
 │                         #   name: my-skill
-
 │                         #   description: ...
-
 │                         #   ---
-
 │                         #   # Skill 正文
-
 ├── agents/               # 可选：Agent 配置
-
 │   └── openai.yaml
-
 ├── tools/                # 可选：辅助脚本
-
 │   └── lint.sh
-
 └── examples/             # 可选：示例
-
     └── sample.md
-
 ```
 
-### 8.4 ZIP 导入完整流程
+### 3.3 ZIP 导入完整流程
 
 ```
-
 POST /api/orgs/:org_id/skills/import/zip    Content-Type: multipart/form-data
-
   → 内存解压 ZIP（≤10MB, MaxBytesReader）
-
   → 校验必须有 SKILL.md
-
   → 解析 frontmatter → 写入 skills 表（source_type="zip", zip_hash=SHA256）
-
 ```
 
 > ZIP 全程内存处理，≤10MB。SHA256 去重可选（当前不自动去重）。
 
-### 8.3 启用控制
+### 3.4 启用控制
 
 ```
-
                  ┌─────────────────┐
-
                  │  Skill A (全局)  │
-
                  │  enabled: true   │────────── 全局开关
-
                  └────────┬────────┘
-
                           │
-
           ┌───────────────┼───────────────┐
-
           │               │               │
-
     ┌─────┴─────┐   ┌─────┴─────┐   ┌─────┴─────┐
-
     │ Agent CEO │   │ Agent CTO │   │ Agent Dev │
-
     │ Skill A ✅ │   │ Skill A ✅ │   │ Skill A ❌ │── 单Agent开关
-
     └───────────┘   └───────────┘   └───────────┘
-
 ```
 

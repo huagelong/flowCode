@@ -3,19 +3,21 @@
 ## 文档关系图
 
 ```
-docs/plan/
-├── README.md                  ← 本文档索引
-├── 01-admin.md                ← 后台管理：配置体系 + 嵌入 SPA
-├── 02-api.md                  ← API / 后端：框架、数据模型、路由
-├── 03-client.md               ← 客户端前端：IM 界面、时间线、国际化
-├── 04-sandbox.md              ← Agent 基础设施：Eino 框架、状态机、通知、Git、Token
-├── 04b-sandbox-runtime.md     ← 沙箱执行运行时：SandboxManager、RuntimeManager
-├── 06-agent.md                ← anserAgent 智能体系统
-├── 07-architecture.md         ← 系统愿景、技术栈、约束范围
-├── 08-deployment.md           ← 部署指南
-├── 09-ci-cd.md                ← CI/CD 工作流
-├── 10-roadmap.md              ← 开发路线图 + 数据库迁移
-└── 11-backlog.md              ← 远期 backlog 规划
+docs/
+├── ddl.sql                      ← 数据库 DDL 建表语句 + 种子数据
+└── plan/
+    ├── README.md                  ← 本文档索引
+    ├── 01-admin.md                ← 后台管理：配置体系 + 嵌入 SPA
+    ├── 02-api.md                  ← API / 后端：框架、数据模型、路由
+    ├── 03-client.md               ← 客户端前端：IM 界面、时间线、国际化
+    ├── 04-sandbox.md              ← Agent 基础设施：Eino 框架、状态机、通知、Git、Token
+    ├── 04b-sandbox-runtime.md     ← 沙箱执行运行时：SandboxManager、RuntimeManager
+    ├── 06-agent.md                ← anserAgent 智能体系统
+    ├── 07-architecture.md         ← 系统愿景、技术栈、约束范围
+    ├── 08-deployment.md           ← 部署指南
+    ├── 09-ci-cd.md                ← CI/CD 工作流
+    ├── 10-roadmap.md              ← 开发路线图 + 数据库迁移
+    └── 11-backlog.md              ← 远期 backlog 规划
 ```
 
 ## 阅读顺序建议

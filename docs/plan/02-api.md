@@ -782,7 +782,7 @@ func (s *IssueService) TransitionToTodo(ctx context.Context, issueID uint) error
 
 ## 二、核心数据模型
 
-### 9.0 角色与权限管理（RBAC）
+### 2.0 角色与权限管理（RBAC）
 
 AnserFlow 采用双层 RBAC 模型：**系统级角色** + **组织级角色**，由 Casbin 统一管理策略，MySQL 存储策略表，运行时动态加载。
 
