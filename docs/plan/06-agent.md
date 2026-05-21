@@ -1,25 +1,33 @@
 # AnserFlow - anserAgent 智能体系统
 
+> 设计参考：Eino ADK（Agent Development Kit）— 统一 Agent 接口、Workflow 编排、中断恢复、Human-in-the-Loop
+
 ---
 
 ## 一、系统定位
 
-anserAgent 是 AnserFlow 的通用智能体内核，基于 Eino（Go 原生 AI 框架）构建，替代原 eino-* Skills 硬编码编排，承担两大职责：
+anserAgent 是 AnserFlow 的通用智能体内核，基于 Eino ADK（Go 原生 AI Agent 框架）构建，实现统一的 `Agent` 接口，替代原 eino-* Skills 硬编码编排。承担两大职责：
 
 | 职责 | 场景 | 说明 |
 |------|------|------|
 | **调度编排** | 群聊讨论、/backlog 方案拆解、/todo 快速建任务 | Agent 参与 IM 群聊协作 |
 | **执行编排** | 沙箱编码任务（Issue 执行） | Agent 在 Docker 沙箱内完成编码 |
 
+设计理念对齐 Eino ADK 的三大原则：
+- **少写胶水**：统一 `Agent` 接口 + `AsyncIterator` 事件流，编排器无需关心子 Agent 类型
+- **快速编排**：内置 Sequential / Parallel / Loop Workflow Agent，复杂流程通过组合而非硬编码
+- **更可控**：CheckPointStore 中断恢复 + Human-in-the-Loop 审批，执行过程可暂停、可审计
+
 ```
 ┌─────────────────────────────────────────────────────┐
 │  anserAgent                                          │
 │                                                      │
 │  ┌──────────────────────────────────────────────┐   │
-│  │  Eino Graph（底层引擎）                        │   │
-│  │  ├── ChatModel   LLM 调用                     │   │
-│  │  ├── Tool        行动能力（Skills → Tools）    │   │
-│  │  └── Callbacks   回调/日志/Token 追踪         │   │
+│  │  Eino ADK（底层引擎）                          │   │
+│  │  ├── ChatModelAgent  ReAct 推理循环          │   │
+│  │  ├── Workflow Agents  Sequential/Parallel/Loop│   │
+│  │  ├── Runner         事件流 + CheckPoint 管理  │   │
+│  │  └── Callbacks      回调/日志/Token 追踪      │   │
 │  └──────────────────────────────────────────────┘   │
 │                                                      │
 │  ┌────────────┐  ┌────────────┐  ┌───────────────┐ │
@@ -31,14 +39,52 @@ anserAgent 是 AnserFlow 的通用智能体内核，基于 Eino（Go 原生 AI �
 
 ---
 
-## 二、目录结构
+## 二、设计基础 — Agent 统一接口
+
+参照 Eino ADK 的 `Agent` 接口设计，anserFlow 中所有 Agent 类型（ChatModel Agent / Workflow Agent / Custom Agent）都实现同一个接口：
+
+```go
+// core/interface.go
+
+type Agent interface {
+    // Name 返回 Agent 名称，用于日志和 Agent 间发现
+    Name(ctx context.Context) string
+
+    // Description 返回 Agent 描述，用于 Supervisor 模式下的任务路由
+    Description(ctx context.Context) string
+
+    // Run 执行 Agent，返回异步事件迭代器
+    // 每个事件可以是推理输出（Output）、工具调用（Action）或中断（Interrupted）
+    Run(ctx context.Context, input *AgentInput) *AsyncIterator[*AgentEvent]
+}
+```
+
+**核心优势**：
+- 编排器（Runner / Orchestrator）统一调度任意 Agent，无需类型断言
+- Workflow Agent 的子 Agent 可以是任意类型，支持嵌套组合
+- 中断/恢复机制在接口层统一注入，所有 Agent 自动获得可中断能力
+
+---
+
+## 三、目录结构
 
 ```
 internal/agent/
 ├── core/                       # anserAgent 内核
-│   ├── agent.go                # Agent 主循环（Eino Graph 驱动）
+│   ├── interface.go            # [新增] Agent 统一接口
+│   ├── agent.go                # ChatModelAgent 实现（ReAct 主循环）
 │   ├── config.go               # Agent 配置（模型/记忆/Skills 绑定）
-│   └── context.go              # 上下文构建（System Prompt + 五层记忆注入）
+│   ├── context.go              # 上下文构建（System Prompt + 五层记忆注入）
+│   ├── runner.go               # [新增] Runner 执行容器
+│   └── checkpoint.go           # [新增] CheckPointStore 接口
+├── workflow/                   # [新增] Workflow Agent — 确定性编排
+│   ├── sequential.go           # SequentialAgent（顺序执行）
+│   ├── parallel.go             # ParallelAgent（并发执行）
+│   └── loop.go                 # LoopAgent（循环执行）
+├── hitl/                       # [新增] Human-in-the-Loop
+│   ├── approval.go             # 审批中断（如 commit 前确认）
+│   ├── review.go               # 审查编辑（Agent 输出人工审阅）
+│   └── feedback.go             # 反馈循环（迭代优化）
 ├── memory/                     # 五层记忆系统
 │   ├── manager.go              # MemoryManager（读/写/检索/归档）
 │   ├── meta_rules.go           # L0 元规则加载
@@ -59,15 +105,310 @@ internal/agent/
 │   ├── code_reviewer.go        # 代码审查建议
 │   └── plan_evaluator.go       # 方案对比评估
 └── orchestrator/               # 编排器（调度 + 执行）
-    ├── group_orchestrator.go   # 群聊编排（替代原 GroupOrchestrator）
-    └── sandbox_orchestrator.go # 沙箱执行编排
+    ├── group_orchestrator.go   # 群聊编排（基于 Runner）
+    └── sandbox_orchestrator.go # 沙箱执行编排（基于 Runner + 中断）
 ```
 
 ---
 
-## 三、五层记忆系统
+## 四、Workflow Agents — 确定性编排
 
-### 3.1 分层架构
+参照 Eino ADK 的 WorkflowAgents 设计，提供三种预设执行流程的 Agent 类型，与 LLM 动态决策的 ChatModelAgent 形成互补。
+
+### 4.1 SequentialAgent — 顺序执行
+
+```go
+// workflow/sequential.go
+
+type SequentialAgentConfig struct {
+    Name        string
+    Description string
+    SubAgents   []Agent   // 按顺序执行的子 Agent 列表
+}
+
+func NewSequentialAgent(ctx context.Context, config *SequentialAgentConfig) (Agent, error)
+```
+
+**执行规则**：
+- 线性执行：严格按照 `SubAgents` 数组顺序依次执行
+- History 传递：每个子 Agent 的执行结果追加到 History，后续 Agent 可访问
+- 提前退出：任一子 Agent 产生 `Interrupted` 或错误时终止整个流程
+
+**anserFlow 场景**：CI/CD 风格编码流水线
+```
+需求分析 Agent → 代码生成 Agent → 测试运行 Agent → 报告生成 Agent
+```
+
+### 4.2 ParallelAgent — 并发执行
+
+```go
+// workflow/parallel.go
+
+type ParallelAgentConfig struct {
+    Name        string
+    Description string
+    SubAgents   []Agent   // 并发执行的子 Agent 列表
+}
+
+func NewParallelAgent(ctx context.Context, config *ParallelAgentConfig) (Agent, error)
+```
+
+**执行规则**：
+- 所有子 Agent 并发启动
+- 等待全部完成后汇总结果
+- 任一子 Agent 失败将导致 ParallelAgent 整体返回错误
+
+**anserFlow 场景**：多渠道信息搜集（前端文档 + 后端代码 + API 定义并行分析）
+
+### 4.3 LoopAgent — 循环执行
+
+```go
+// workflow/loop.go
+
+type LoopAgentConfig struct {
+    Name          string
+    Description   string
+    SubAgents     []Agent   // 每次循环执行的子 Agent 序列
+    MaxIterations int       // 最大迭代次数，0 表示无限
+}
+
+func NewLoopAgent(ctx context.Context, config *LoopAgentConfig) (Agent, error)
+```
+
+**执行规则**：
+- 重复执行 SubAgents 序列直到满足退出条件
+- 每次迭代的 History 累积，后续迭代可访问全部历史
+- 退出条件：最大迭代次数到达 / 子 Agent 产生 ExitAction
+
+**anserFlow 场景**：代码 Review → 修改 → 再 Review 的迭代优化闭环
+
+### 4.4 组合示例：沙箱编码流水线
+
+```go
+// 构建编码流水线：分析 → 编码 → 测试循环
+// 注：NewAnserAgent 为 anserFlow 的 ChatModelAgent 工厂函数
+analyzeAgent := NewAnserAgent(ctx, analyzeConfig)
+codeAgent := NewAnserAgent(ctx, codeConfig)
+testAgent := NewAnserAgent(ctx, testConfig)
+
+// 内层循环：编码 + 测试（最多 3 次迭代）
+codeTestLoop := NewLoopAgent(ctx, &LoopAgentConfig{
+    Name:          "CodeTestLoop",
+    SubAgents:     []Agent{codeAgent, testAgent},
+    MaxIterations: 3,
+})
+
+// 外层顺序：分析 → 编码测试循环
+pipeline := NewSequentialAgent(ctx, &SequentialAgentConfig{
+    Name:      "SandboxPipeline",
+    SubAgents: []Agent{analyzeAgent, codeTestLoop},
+})
+```
+
+---
+
+## 五、中断与恢复
+
+参照 Eino ADK 的中断/恢复机制，通过 CheckPointStore 持久化执行状态，支持长任务暂停、恢复和跨实例迁移。
+
+### 5.1 核心概念
+
+```
+Runner.Query(checkPointID="abc")    ──► 执行中 ──► Interrupt ──► 保存状态到 CheckPointStore
+                                                                    │
+Runner.Resume(checkPointID="abc")   ◄── 用户决策后 ◄────────────────┘
+```
+
+| 概念 | 说明 |
+|------|------|
+| **CheckPointID** | Runner 级别的唯一标识，串联"中断前"和"中断后"的多次运行 |
+| **InterruptID** | 标识"在哪里发生了中断"，恢复时需传回同一个 ID |
+| **CheckPointStore** | 状态持久化存储（Redis / MySQL），支持跨实例恢复 |
+| **ResumeParams** | 恢复时传入的用户数据，如审批结果、补充信息 |
+
+### 5.2 CheckPointStore 接口
+
+```go
+// core/checkpoint.go
+
+type CheckPointStore interface {
+    // Save 保存 CheckPoint 状态
+    Save(ctx context.Context, cp *CheckPoint) error
+
+    // Load 加载 CheckPoint 状态
+    Load(ctx context.Context, checkPointID string) (*CheckPoint, error)
+
+    // Delete 删除已完成/已过期的 CheckPoint
+    Delete(ctx context.Context, checkPointID string) error
+}
+
+type CheckPoint struct {
+    ID            string          // CheckPointID
+    AgentPath     []string        // Agent 执行路径
+    InterruptID   string          // 中断点 ID
+    InterruptInfo interface{}     // 中断信息
+    State         []byte          // 序列化的执行状态
+    Status        CheckPointStatus
+}
+
+type CheckPointStatus string
+
+const (
+    CheckPointRunning    CheckPointStatus = "running"
+    CheckPointInterrupted CheckPointStatus = "interrupted"
+    CheckPointResumed    CheckPointStatus = "resumed"
+    CheckPointCompleted  CheckPointStatus = "completed"
+)
+```
+
+### 5.3 典型流程
+
+```go
+// 1. 首次执行
+iter := runner.Query(ctx, "分析并实现 JWT 认证",
+    adk.WithCheckPointID("issue-42"),
+)
+
+for {
+    event, ok := iter.Next()
+    if !ok { break }
+
+    if event.Action != nil && event.Action.Interrupted != nil {
+        // 2. Agent 在 git commit 前中断
+        interruptID := event.Action.Interrupted.ID
+        fmt.Printf("Agent 请求确认: %v\n", event.Action.Interrupted.Info)
+
+        // 3. 展示给用户，等待审批
+        approved := askUserApproval()
+
+        // 4. 恢复执行（可在不同进程/机器）
+        iter, _ = runner.Resume(ctx, "issue-42", &adk.ResumeParams{
+            Targets: map[string]any{
+                interruptID: &ApprovalResult{Approved: approved},
+            },
+        })
+    }
+}
+```
+
+**anserFlow 中的应用**：
+- 沙箱编码中，`git commit` / `DB schema change` 前自动中断，等待人工审批
+- 群聊调度中，Agent 发现需求不明确时中断，等待 IM 补充信息
+- 长时间编码任务中服务重启，恢复后从断点继续
+
+---
+
+## 六、Human-in-the-Loop
+
+参照 Eino ADK 的 HITL 框架，anserFlow 在沙箱编码场景中集成三种人工介入模式：
+
+### 6.1 模式总览
+
+| 模式 | 触发时机 | anserFlow 场景 |
+|------|---------|---------------|
+| **审批模式** | 工具调用前中断，等待确认 | `git push` / `DB migration` 执行前需人工审批 |
+| **审查编辑模式** | 执行前审查并可原地编辑工具参数 | Agent 生成的代码在 `git commit` 前供人工 review 和修改 |
+| **追问模式** | Agent 发现信息不足主动中断追问 | Issue 需求不明确时，Agent 在 IM 中追问澄清 |
+
+### 6.2 审批模式示例
+
+```go
+// hitl/approval.go — 将任意 Tool 包装为可审批的版本
+
+type ApprovableTool struct {
+    tool.InvokableTool
+    requireApproval func(input string) bool  // 判断是否需要审批
+}
+
+func (t *ApprovableTool) InvokableRun(ctx context.Context, input string) (string, error) {
+    if t.requireApproval(input) {
+        // 中断执行，等待审批
+        return "", &InterruptError{
+            InterruptID:   generateInterruptID(),
+            InterruptInfo: fmt.Sprintf("即将执行: %s(%s)，是否确认？", t.Info().Name, input),
+        }
+    }
+    return t.InvokableTool.InvokableRun(ctx, input)
+}
+```
+
+### 6.3 审查编辑模式
+
+Agent 生成代码后、`git commit` 前中断，展示 diff 给人工审查，人工可以：
+- **批准**：直接提交
+- **拒绝**：Agent 重新生成
+- **编辑**：修改工具调用参数后继续执行
+
+---
+
+## 七、Runner 执行容器
+
+参照 Eino ADK 的 `Runner` 设计，作为 Agent 的执行容器，统一管理事件流、中断恢复和 Token 追踪。
+
+### 7.1 Runner 职责
+
+```go
+// core/runner.go
+
+type RunnerConfig struct {
+    Agent           Agent              // 被执行的 Agent
+    CheckPointStore CheckPointStore    // 状态持久化
+    EnableStreaming bool               // 是否启用流式输出
+    MaxIterations   int                // 最大迭代次数（防无限循环）
+}
+
+type Runner struct {
+    config    RunnerConfig
+    tokenMgr  *TokenManager
+}
+
+func NewRunner(ctx context.Context, config RunnerConfig) *Runner
+
+// Query 首次执行或从新起点执行
+func (r *Runner) Query(ctx context.Context, query string, opts ...RunOption) *AsyncIterator[*AgentEvent]
+
+// Resume 从中断点恢复执行
+func (r *Runner) Resume(ctx context.Context, checkPointID string, params *ResumeParams) (*AsyncIterator[*AgentEvent], error)
+```
+
+### 7.2 Runner 工作流程
+
+```
+Runner.Query(query, checkPointID)
+    │
+    ├─► 1. 创建/加载 CheckPoint
+    ├─► 2. 构建 AgentInput
+    ├─► 3. Agent.Run(ctx, input) → AsyncIterator
+    │       │
+    │       ├─► AgentEvent{Output}   → 流式推送给调用方
+    │       ├─► AgentEvent{Action}   → 记录 Token 用量
+    │       └─► AgentEvent{Interrupted} → 保存 CheckPoint → 返回控制权给调用方
+    │
+    └─► 4. 完成后删除 CheckPoint
+
+Runner.Resume(checkPointID, params)
+    │
+    ├─► 1. 加载 CheckPoint
+    ├─► 2. 恢复执行上下文
+    ├─► 3. 将 ResumeParams 注入中断点
+    └─► 4. Agent.Run() 从中断点继续
+```
+
+### 7.3 与现有模块的关系
+
+- **编排器**：GroupOrchestrator / SandboxOrchestrator 不再直接调用 `Agent.Run()`，而是通过 `Runner.Query()/Resume()` 管理完整生命周期
+- **TokenManager**：Runner 在事件流消费过程中自动统计 Token 用量
+- **CheckPointStore**：支持 InMemory（开发调试）/ Redis（生产环境）/ MySQL（持久化）三种实现
+
+**anserFlow 场景对应**：
+- 群聊调度：`Runner.Query(sessionID)` → 流式推送到 IM
+- 沙箱执行：`Runner.Query(issueID)` → 中断 → `Runner.Resume(issueID, approval)` → 继续
+
+---
+
+## 八、五层记忆系统
+
+### 8.1 分层架构
 
 记忆在任务执行过程中持续沉淀，使 Agent 逐步形成稳定且高效的工作方式：
 
@@ -105,7 +446,7 @@ internal/agent/
 └──────────────────────────────────────────────────┘
 ```
 
-### 3.2 项目级记忆目录
+### 8.2 项目级记忆目录
 
 ```
 /var/lib/anserflow/projects/{project_id}/memory/
@@ -133,7 +474,7 @@ internal/agent/
     └── ...
 ```
 
-### 3.3 各层内容示例
+### 8.3 各层内容示例
 
 **L0 — 元规则**（`L0-meta-rules.md`）：
 
@@ -260,7 +601,7 @@ tags: [frontend, react, auth, jwt]
 - 更新了 L2: api-contracts（添加 JWT 约定）
 ```
 
-### 3.4 核心接口
+### 8.4 核心接口
 
 ```go
 // memory/manager.go
@@ -310,7 +651,7 @@ const (
 )
 ```
 
-### 3.5 记忆读写时机
+### 8.5 记忆读写时机
 
 | 时机 | 操作 | 层级 |
 |------|------|------|
@@ -323,7 +664,7 @@ const (
 | Skill 执行失败 | Improve 失败 Skill | L3（Skills 自改进） |
 | L2/L3/L4 更新后 | UpdateIndex 同步路由表 | L1（索引） |
 
-### 3.6 更新频率与权限
+### 8.6 更新频率与权限
 
 | 层级 | 更新频率 | 谁能写 | 自动/人工 |
 |------|---------|--------|----------|
@@ -335,9 +676,9 @@ const (
 
 ---
 
-## 四、Skills 自改进引擎
+## 九、Skills 自改进引擎
 
-### 4.1 Skill 生命周期
+### 9.1 Skill 生命周期
 
 ```
 ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
@@ -350,7 +691,7 @@ const (
      └─────────────────── 改进后的 Skill 覆盖原版本 ─────────────────┘
 ```
 
-### 4.2 Skill 自动生成规则
+### 9.2 Skill 自动生成规则
 
 ```go
 // skill_engine/rules.go — Skill 自动生成规则定义
@@ -390,7 +731,7 @@ const (
 | `R04` | 单次执行 Token > 50k | `extract` | 高成本任务提取优化模式 |
 | `R05` | 人工 `/skill save` 指令 | `extract` | 手动保存当前会话为 Skill |
 
-### 4.3 Skill 结晶化（借鉴 GenericAgent）
+### 9.3 Skill 结晶化（借鉴 GenericAgent）
 
 ```go
 // skill_engine/generator.go
@@ -436,7 +777,7 @@ func (g *SkillGenerator) shouldCrystallize(record ExecutionRecord) bool {
 }
 ```
 
-### 4.4 Skill 自改进
+### 9.4 Skill 自改进
 
 ```go
 // skill_engine/improver.go
@@ -478,7 +819,7 @@ func (s *SkillImprover) needsImprovement(req ImproveRequest) bool {
 }
 ```
 
-### 4.5 Skill 过时检测
+### 9.5 Skill 过时检测
 
 | 维度 | 检测方式 | 示例 |
 |------|---------|------|
@@ -490,9 +831,23 @@ func (s *SkillImprover) needsImprovement(req ImproveRequest) bool {
 
 ---
 
-## 五、Agent 主循环
+## 十、Agent 主循环
 
-### 5.1 核心接口
+### 10.1 Agent 统一接口
+
+```go
+// core/interface.go — 实现 Eino ADK Agent 接口
+
+type Agent interface {
+    Name(ctx context.Context) string
+    Description(ctx context.Context) string
+    Run(ctx context.Context, input *AgentInput) *AsyncIterator[*AgentEvent]
+}
+```
+
+anserAgent 作为 ChatModelAgent 实现该接口，Workflow Agents（Sequential/Parallel/Loop）也实现同一接口，使得编排器可以统一调度任意 Agent 类型。
+
+### 10.2 anserAgent 实现
 
 ```go
 // core/agent.go
@@ -508,42 +863,80 @@ type anserAgent struct {
     analyzer   *analysis.Engine
 }
 
-func (a *anserAgent) Invoke(
+func (a *anserAgent) Name(ctx context.Context) string { return a.name }
+func (a *anserAgent) Description(ctx context.Context) string { return a.role }
+
+// Run 实现 Agent 接口，返回异步事件流
+func (a *anserAgent) Run(
     ctx context.Context,
-    input AgentInput,
-) (*AgentResponse, error) {
-    // 1. 五层记忆注入
-    memories := a.memory.Recall(ctx, RecallRequest{
-        AgentID: a.id, Query: input.Query, Limit: 10,
-    })
+    input *AgentInput,
+) *AsyncIterator[*AgentEvent] {
+    iter := NewAsyncIterator[*AgentEvent]()
 
-    // 2. 构建 System Prompt（L0 元规则 + 角色人设）
-    systemPrompt := a.buildSystemPrompt(memories)
+    go func() {
+        defer iter.Close()
 
-    // 3. 加载 L3 Skills → Eino Tools
-    tools := a.skills.LoadAsTools(ctx, a.id)
+        // 1. 五层记忆注入
+        memories := a.memory.Recall(ctx, RecallRequest{
+            AgentID: a.id, Query: input.Query, Limit: 10,
+        })
 
-    // 4. 组装消息
-    messages := a.assembleMessages(systemPrompt, memories, input)
+        // 2. 构建 System Prompt（L0 元规则 + 角色人设）
+        systemPrompt := a.buildSystemPrompt(memories)
 
-    // 5. 调用 Eino ChatModel
-    resp, err := a.chatModel.Generate(ctx, messages,
-        model.WithTools(tools),
-        model.WithCallbacks(a.tokenCallback()),
-    )
-    if err != nil {
-        return nil, err
-    }
+        // 3. 加载 L3 Skills → Eino Tools
+        tools := a.skills.LoadAsTools(ctx, a.id)
 
-    // 6. 后处理
-    a.memory.Store(ctx, Memory{
-        Layer: LayerL4, Content: resp.Content, Tags: input.Tags,
-    })
+        // 4. 组装消息
+        messages := a.assembleMessages(systemPrompt, memories, input)
 
-    // 7. Skill 结晶化评估（异步）
-    go a.skills.MaybeCrystallize(ctx, input, resp)
+        // 5. ReAct 循环：Reason → Act → Observe
+        for {
+            resp, err := a.chatModel.Generate(ctx, messages,
+                model.WithTools(tools),
+                model.WithCallbacks(a.tokenCallback()),
+            )
+            if err != nil {
+                iter.Emit(&AgentEvent{Err: err})
+                return
+            }
 
-    return a.parseResponse(resp), nil
+            // 推送推理事件
+            iter.Emit(&AgentEvent{
+                AgentName: a.name,
+                Output: &AgentOutput{
+                    MessageOutput: &schema.Message{Role: schema.Assistant, Content: resp.Content},
+                },
+            })
+
+            // 如果没有工具调用，结束循环
+            if len(resp.ToolCalls) == 0 {
+                // 后处理
+                a.memory.Store(ctx, Memory{
+                    Layer: LayerL4, Content: resp.Content, Tags: input.Tags,
+                })
+                // Skill 结晶化评估（异步）
+                go a.skills.MaybeCrystallize(ctx, input, resp)
+                return
+            }
+
+            // 6. 执行工具调用（Act）
+            for _, tc := range resp.ToolCalls {
+                result := a.executeTool(ctx, tc)
+                iter.Emit(&AgentEvent{
+                    AgentName: a.name,
+                    Action: &AgentAction{
+                        ToolCall: tc,
+                        ToolResult: result,
+                    },
+                })
+                // 工具结果追加到消息历史（Observation）
+                messages = append(messages, result.AsMessage())
+            }
+        }
+    }()
+
+    return iter
 }
 
 type AgentInput struct {
@@ -562,15 +955,31 @@ const (
     ModeExecute     AgentMode = "execute"      // 沙箱执行编排
 )
 
-type AgentResponse struct {
-    Content    string
-    ToolCalls  []ToolCallResult
-    TokenUsage TokenUsageDetail
-    MemStored  int
+type AgentEvent struct {
+    AgentName string
+    Output    *AgentOutput
+    Action    *AgentAction
+    Err       error
+}
+
+type AgentOutput struct {
+    MessageOutput *schema.Message
+}
+
+type AgentAction struct {
+    ToolCall   interface{}
+    ToolResult interface{}
+    // Interrupted 非 nil 时表示 Agent 在此处中断
+    Interrupted *InterruptContext
+}
+
+type InterruptContext struct {
+    ID   string      // 中断唯一 ID，恢复时需传回
+    Info interface{} // 中断信息（供用户决策）
 }
 ```
 
-### 5.2 上下文构建（信息密度最大化）
+### 10.3 上下文构建（信息密度最大化）
 
 ```go
 // core/context.go — 分层记忆注入，控制总 Token 预算
@@ -601,7 +1010,7 @@ func (a *anserAgent) buildSystemPrompt(memories []Memory) string {
 }
 ```
 
-### 5.3 调度编排模式
+### 10.4 调度编排模式（基于 Runner）
 
 ```go
 // orchestrator/group_orchestrator.go
@@ -609,29 +1018,45 @@ func (a *anserAgent) buildSystemPrompt(memories []Memory) string {
 func (o *GroupOrchestrator) OnMessage(ctx context.Context, msg Message) {
     agent := o.agentRegistry.Get(msg.GroupID)
 
-    input := AgentInput{
+    input := &AgentInput{
         Query:     msg.Content.Text,
         Context:   o.getSessionHistory(msg.GroupID, msg.SessionID),
         Mode:      ModeOrchestrate,
         SessionID: msg.SessionID,
     }
 
-    resp, err := agent.Invoke(ctx, input)
-    if err != nil {
-        o.sendErrorMessage(msg.GroupID, err)
-        return
+    // 创建 Runner，配置 CheckPointStore
+    runner := NewRunner(ctx, RunnerConfig{
+        Agent:           agent,
+        CheckPointStore: o.checkPointStore,
+        EnableStreaming: true,
+    })
+
+    // 异步事件流消费
+    iter := runner.Query(ctx, input, WithCheckPointID(msg.SessionID))
+    for {
+        event, ok := iter.Next()
+        if !ok {
+            break
+        }
+        if event.Err != nil {
+            o.sendErrorMessage(msg.GroupID, event.Err)
+            return
+        }
+        // 流式推送推理/工具调用事件到 IM
+        if event.Output != nil && event.Output.MessageOutput != nil {
+            o.streamToIM(msg.GroupID, event.Output.MessageOutput.Content)
+        }
     }
 
-    o.persistAndBroadcast(msg.GroupID, resp.Content)
-
     // 会话结束时归档到 L4
-    if o.isSessionEnding(resp) {
+    if o.isSessionEnding() {
         o.memory.SummarizeAndArchive(ctx, msg.SessionID)
     }
 }
 ```
 
-### 5.4 沙箱执行编排模式
+### 10.5 沙箱执行编排模式（基于 Runner + 中断）
 
 ```go
 // orchestrator/sandbox_orchestrator.go
@@ -645,26 +1070,55 @@ func (s *SandboxOrchestrator) ExecuteIssue(ctx context.Context, issue *Issue) er
         Query: issue.Title, Layers: []MemoryLayer{LayerL2, LayerL3},
     })
 
-    input := AgentInput{
+    input := &AgentInput{
         Query:   issue.BuildTaskPrompt(),
         Mode:    ModeExecute,
         IssueID: &issue.ID,
         Tags:    s.extractTags(issue),
     }
 
-    resp, err := agent.Invoke(ctx, input)
-    if err != nil {
-        // 执行失败 → 触发 Skill 自改进
-        s.skillImprover.Improve(ctx, ImproveRequest{
-            SkillID:   s.detectRelatedSkill(issue),
-            Execution: resp.Record,
-            Error:     wrapTaskError(err),
-        })
-        return err
+    checkPointID := fmt.Sprintf("issue-%d", issue.ID)
+
+    runner := NewRunner(ctx, RunnerConfig{
+        Agent:           agent,
+        CheckPointStore: s.checkPointStore,
+        EnableStreaming: true,
+    })
+
+    iter := runner.Query(ctx, input, WithCheckPointID(checkPointID))
+    for {
+        event, ok := iter.Next()
+        if !ok {
+            break
+        }
+
+        // 处理中断事件（如 commit 前审批）
+        if event.Action != nil && event.Action.Interrupted != nil {
+            interruptID := event.Action.Interrupted.ID
+            // 将中断信息推送给用户，等待审批
+            approval := s.waitForApproval(ctx, event.Action.Interrupted.Info)
+            // 恢复执行
+            iter, _ = runner.Resume(ctx, checkPointID, &ResumeParams{
+                Targets: map[string]any{interruptID: approval},
+            })
+            continue
+        }
+
+        if event.Err != nil {
+            // 执行失败 → 触发 Skill 自改进
+            s.skillImprover.Improve(ctx, ImproveRequest{
+                SkillID:   s.detectRelatedSkill(issue),
+                Error:     wrapTaskError(event.Err),
+            })
+            return event.Err
+        }
+
+        // 记录执行事件供后续结晶化评估
+        s.executionRecorder.Record(event)
     }
 
     // 执行成功 → 评估是否结晶为新 Skill
-    s.skillGenerator.MaybeCrystallize(ctx, resp.Record)
+    s.skillGenerator.MaybeCrystallize(ctx, s.executionRecorder.Finalize())
 
     return nil
 }
@@ -672,7 +1126,7 @@ func (s *SandboxOrchestrator) ExecuteIssue(ctx context.Context, issue *Issue) er
 
 ---
 
-## 六、与其他模块的集成
+## 十一、与其他模块的集成
 
 ```
 ┌───────────────────────────────────────────────────────┐
@@ -681,29 +1135,38 @@ func (s *SandboxOrchestrator) ExecuteIssue(ctx context.Context, issue *Issue) er
 │  Hub.OnMessage()                                       │
 │       │                                                │
 │       ▼                                                │
-│  anserAgent.Invoke(mode=orchestrate)                  │
+│  Runner.Query(mode=orchestrate, checkPointID)          │
 │       │                                                │
-│       ├── MemoryManager ──► memory/ (L0~L4 Markdown)  │
-│       ├── SkillManager  ──► L3-skills/ + MySQL        │
-│       └── Eino ChatModel ──► LLM API                  │
+│       ├── Agent.Run() ──► AsyncIterator[*AgentEvent]  │
+│       │     ├── MemoryManager ──► memory/ (L0~L4)     │
+│       │     ├── SkillManager  ──► L3-skills/ + MySQL  │
+│       │     └── Eino ChatModel ──► LLM API            │
+│       ├── CheckPointStore ──► Redis / MySQL           │
+│       └── TokenManager ──► 用量追踪                   │
 │                                                        │
 │  Worker（Asynq）                                      │
 │       │                                                │
 │       ▼                                                │
-│  anserAgent.Invoke(mode=execute)                      │
+│  Runner.Run(mode=execute, checkPointID)               │
 │       │                                                │
-│       ├── MemoryManager ──► L2 事实 + L3 Skills       │
-│       ├── SkillManager  ──► anser-coder 等            │
-│       └── RuntimeAdapter ──► anserAgent 沙箱   │
+│       ├── Agent.Run() ──► AsyncIterator[*AgentEvent]  │
+│       │     ├── MemoryManager ──► L2 事实 + L3 Skills │
+│       │     ├── SkillManager  ──► anser-coder 等      │
+│       │     └── RuntimeAdapter ──► anserAgent 沙箱    │
+│       ├── CheckPointStore ──► Redis / MySQL           │
+│       └── HITL ──► 审批中断 / 审查编辑                │
 └───────────────────────────────────────────────────────┘
 ```
 
 | 模块 | anserAgent 关系 |
 |------|----------------|
-| **Eino** | 底层引擎，提供 ChatModel / Graph / Tool / Callbacks |
-| **RuntimeAdapter** | 执行模式的行动层（anserAgent） |
+| **Eino ADK** | Agent 接口 + ChatModelAgent + Workflow Agents + Runner + 中断/恢复 |
+| **Eino Graph** | 底层引擎，提供 ChatModel / Graph / Tool / Callbacks |
+| **RuntimeAdapter** | 执行模式的行动层（anserAgent 沙箱） |
 | **MemoryManager** | 五层记忆读写，Markdown Wiki 文件存储 |
 | **SkillManager** | Skills 加载、自动生成、自改进 |
+| **CheckPointStore** | 执行状态持久化，支持中断恢复（Redis / MySQL） |
+| **Runner** | Agent 执行容器，管理事件流、中断、Token 追踪 |
 | **GitManager** | 执行模式中调用 GitOps |
 | **SandboxManager** | 执行模式中创建/管理沙箱容器 |
 | **TokenManager** | 记录所有 LLM Token 用量 |
@@ -711,9 +1174,32 @@ func (s *SandboxOrchestrator) ExecuteIssue(ctx context.Context, issue *Issue) er
 
 ---
 
-## 七、数据库表
+## 十二、数据库表
 
-### 7.1 agent_memories
+### 12.1 agent_checkpoints
+
+```sql
+CREATE TABLE agent_checkpoints (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    checkpoint_id VARCHAR(128) NOT NULL UNIQUE,  -- Runner 级别的唯一 CheckPoint ID
+    agent_id BIGINT NOT NULL,
+    project_id BIGINT NOT NULL,
+    org_id BIGINT NOT NULL,
+    agent_path JSON NOT NULL,                     -- Agent 执行路径（用于恢复定位）
+    interrupt_id VARCHAR(128),                    -- 中断点 ID（关联 InterruptContext）
+    interrupt_info TEXT,                          -- 中断信息（供用户决策）
+    state_data MEDIUMTEXT NOT NULL,               -- 序列化的执行状态
+    status ENUM('running','interrupted','resumed','completed','failed') DEFAULT 'running',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_agent_project (agent_id, project_id),
+    INDEX idx_status (status),
+    FOREIGN KEY (agent_id) REFERENCES agents(id),
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+```
+
+### 12.2 agent_memories
 
 ```sql
 CREATE TABLE agent_memories (
@@ -738,7 +1224,7 @@ CREATE TABLE agent_memories (
 );
 ```
 
-### 7.2 skill_generation_logs
+### 12.3 skill_generation_logs
 
 ```sql
 CREATE TABLE skill_generation_logs (
@@ -761,9 +1247,9 @@ CREATE TABLE skill_generation_logs (
 
 ---
 
-## 八、从 eino-* Skills 到 anserAgent 的迁移映射
+## 十三、从 eino-* Skills 到 anserAgent 的迁移映射
 
-原 eino-* Skills 的功能全部由 anserAgent 五层记忆系统接管：
+原 eino-* Skills 的功能全部由 anserAgent + Eino ADK 接管：
 
 | 原 Skill | 迁移到 | 说明 |
 |----------|--------|------|
@@ -771,19 +1257,25 @@ CREATE TABLE skill_generation_logs (
 | ~~eino-backlog~~ | **L3 Skill** | /backlog 方案拆解作为可自改进的 SOP |
 | ~~eino-optimizer~~ | **SkillImprover** | 提示词优化逻辑由自改进引擎接管 |
 | ~~eino-planner~~ | **L3 Skill** | 任务编排 SOP，可自动生成 |
+| ~~eino-* 硬编码编排~~ | **Workflow Agents + Runner** | 编排逻辑交由 Eino ADK Sequential/Parallel/Loop Agent + Runner 统一管理 |
 | anser-coder | 保留 | 沙箱执行规范，不变 |
 
 ---
 
-## 九、当前阶段范围
+## 十四、当前阶段范围
 
 | 功能 | Phase 1（当前） | [Phase 2](11-backlog.md) |
 |------|:---:|:---:|
-| anserAgent 内核（Eino ChatModel） | ✅ | ✅ |
+| Agent 统一接口（实现 Eino ADK Agent 接口） | ✅ | ✅ |
+| anserAgent 内核（Eino ChatModelAgent ReAct） | ✅ | ✅ |
+| Workflow Agents（Sequential / Parallel / Loop） | ✅ | ✅ |
+| Runner 执行容器（事件流 + CheckPoint 管理） | ✅ | ✅ |
+| 中断与恢复（CheckPointStore） | ✅ | ✅ |
 | 五层记忆（L0~L4）+ Wiki 文件存储 | ✅ | ✅ |
 | Skill 自动生成（R01~R05） | ✅ | ✅ |
 | Skill 过时检测 + 自改进 | ✅ | ✅ |
 | 调度编排 + 沙箱执行编排 | ✅ | ✅ |
+| Human-in-the-Loop（审批中断） | ❌ | ✅ |
 | 记忆语义检索（向量） | ❌ | ✅ |
-| 多 Agent 并行执行编排 | ❌ | ✅ |
+| Multi-Agent 范式（Supervisor / Plan-Execute） | ❌ | ✅ |
 | Skill 版本回滚 | ❌ | ✅ |
