@@ -87,7 +87,7 @@ anserflow worker --config config.yaml --mode sandbox
 | Docker 运行 | Docker daemon 启动 | `docker info` |
 | 沙箱镜像 | `docker build ...` | `docker images | grep anserflow` |
 | 运行时数据目录 | `mkdir -p /var/lib/anserflow` | 目录存在 |
-| 全局模板初始化 | 首次 `anserflow init` | `/var/lib/anserflow/runtimes/opencode/` 存在 |
+| 全局模板初始化 | 首次 `anserflow init` | `/var/lib/anserflow/runtimes/anseragent/` 存在 |
 | 健康检查 | `curl /api/health` | 返回 `{"status":"ok"}` |
 
 ## 服务器关键目录结构
@@ -95,12 +95,8 @@ anserflow worker --config config.yaml --mode sandbox
 ```
 /var/lib/anserflow/
 ├── runtimes/                     # 全局运行时模板
-│   ├── opencode/                 # opencode 默认配置 + Skills
-│   │   ├── config.json
-│   │   └── skills/
-│   └── hermes/                   # hermes 默认配置 + Skills
+│   └── anseragent/               # anserAgent 默认配置 + Skills
 │       ├── config.yaml
-│       ├── .env
 │       └── skills/
 ├── projects/
 │   └── {project_id}/
@@ -114,6 +110,6 @@ anserflow worker --config config.yaml --mode sandbox
 2. **Docker 容器 AutoRemove=false** — 配合 `RecoverRunningIssues` 恢复机制
 3. **端口 8080** — 唯一对外端口（API + WebSocket + 两个 SPA 全在同一个端口）
 4. **单二进制部署** — `admin/dist` 和 `client/dist` 通过 Go embed 打入，服务器不需要 Node.js 运行时
-5. **沙箱镜像包含双运行时** — opencode（Go 二进制）+ hermes-agent（Python pip），`ENTRYPOINT []` 由 Go Docker SDK 动态指定
+5. **沙箱镜像仅含 anserflow 二进制** — `anserflow agent run`（Go 二进制）+ git + bash，`ENTRYPOINT ["/entrypoint.sh"]` 由 Go Docker SDK 调用
 
 

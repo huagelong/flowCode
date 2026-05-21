@@ -103,7 +103,7 @@ anserflow restore --file data/migrations/20260514120000_before.sql
 internal/seed/
 ├── 001_default_skills.sql     # 系统预置 Skill（anser-coder + 6个角色Skill）
 ├── 002_casbin_policies.sql    # Casbin RBAC 角色权限策略
-├── 003_runtime_skills.sql     # 各运行时默认 Skill 绑定（opencode→anser-coder）
+├── 003_runtime_skills.sql     # 各运行时默认 Skill 绑定（anserAgent→anser-coder）
 └── 004_example_agent.sql      # 可选：示例 Agent 配置
 ```
 
@@ -111,7 +111,7 @@ internal/seed/
 
 | Skill 名称 | 用途 | anserAgent 环节 | 核心内容 |
 |-----------|------|----------------|----------|
-| `anser-coder` | 编码执行规范 | opencode/hermes 沙箱执行 | 代码风格、提交规范、PR 格式 |
+| `anser-coder` | 编码执行规范 | anserAgent 沙箱执行 | 代码风格、提交规范、PR 格式 |
 
 > 预置 Skill 仅 `anser-coder`（沙箱执行规范）。调度编排能力由 anserAgent 五层记忆系统提供，不再依赖硬编码 eino-* Skills。
 

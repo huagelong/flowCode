@@ -105,7 +105,7 @@
 └──────────────────────────────────────────┘
 ```
 
-> **opencode**：AnserFlow 内置默认运行时，基于开源 AI 编码代理 [anomalyco/opencode](https://github.com/anomalyco/opencode)（TypeScript，160k+ Stars）。**hermes**：Nous Research 开源 AI Agent，支持 20+ Provider、持久记忆、Skills 系统。
+> **anserAgent**：AnserFlow 自研 AI Agent 系统，五层记忆（L0-L4）驱动，集成 Eino 编排框架，支持 Skill 引擎与自改进。详见 [06-agent.md](06-agent.md)。
 
 ### 选型理由
 
@@ -146,7 +146,7 @@ graph TD
 
     C --> C1["Agent 角色定义(自定义提示词)"]
     C --> C2["Agent System Prompt / 人设"]
-    C --> C3["绑定运行时（opencode 默认）"]
+    C --> C3["绑定运行时（anserAgent 默认）"]
     C --> C4["Agent 绑定运行时 + 配置覆盖"]
     C --> C5["全局开关 / 单独启停"]
 
@@ -169,8 +169,8 @@ graph TD
 
     G --> G1["监听 todo→in_progress 自动入队"]
     G --> G2["Asynq 入队 → Worker 消费"]
-    G --> G3["Docker 沙箱 + opencode run"]
-    G --> G4["opencode 检查结果 → commit → PR"]
+    G --> G3["Docker 沙箱 + anserflow agent run"]
+    G --> G4["anserflow 检查结果 → commit → PR"]
     G --> G5["监听人工提示词 → 重新执行"]
 
     H --> H1["Skill 定义(全局)"]

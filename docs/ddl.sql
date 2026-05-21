@@ -419,19 +419,10 @@ INSERT INTO casbin_rules (ptype, v0, v1, v2) VALUES
     ('p', 'role:super_admin', '*', '(read)|(write)|(delete)|(manage)');
 
 INSERT INTO runtimes (name, display_name, description, docker_image, install_cmd, execute_template, config_schema, default_config, is_builtin) VALUES
-('opencode', 'OpenCode', '开源 AI 编码代理，TypeScript，160k+ Stars',
+('anseragent', 'anserAgent', 'AnserFlow 自研 AI Agent，五层记忆驱动，支持 Eino 编排、Skill 系统',
  'ghcr.io/anserflow/sandbox:latest',
- 'npm install -g opencode-ai@latest',
- 'opencode run "{prompt}" --model {provider}/{model} --agent {agent} --dangerously-skip-permissions --format json',
- '{"type":"object","properties":{"provider":{"type":"string","enum":["openai","anthropic","google","deepseek"]},"model":{"type":"string"},"agent":{"type":"string","enum":["build","plan"]},"api_key_encrypted":{"type":"string"},"max_iterations":{"type":"number","default":20},"thinking":{"type":"boolean","default":true}}}',
- '{"provider":"openai","model":"gpt-4o","agent":"build","max_iterations":20,"thinking":true}',
- 1);
-
-INSERT INTO runtimes (name, display_name, description, docker_image, install_cmd, execute_template, config_schema, default_config, is_builtin) VALUES
-('hermes', 'Hermes Agent', 'Nous Research 开源 AI Agent，Python，支持 20+ Provider、持久记忆、Skills 系统',
- 'ghcr.io/anserflow/sandbox:latest',
- 'curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash',
- 'hermes chat -q "{prompt}" -m {provider}/{model} --yolo -Q',
- '{"type":"object","properties":{"provider":{"type":"string","enum":["openrouter","openai","anthropic","deepseek","nous","google"]},"model":{"type":"string"},"api_key_encrypted":{"type":"string"},"max_iterations":{"type":"number","default":20},"personality":{"type":"string","description":"Agent 人设名"}}}',
- '{"provider":"openrouter","model":"anthropic/claude-sonnet-4","max_iterations":20}',
+ NULL,
+ 'anserflow agent run --workdir {workdir} --config {config} --prompt "{prompt}" --format json',
+ '{"type":"object","properties":{"provider":{"type":"string","enum":["openai","anthropic","google","deepseek"]},"model":{"type":"string"},"api_key_encrypted":{"type":"string"},"max_iterations":{"type":"number","default":20},"thinking":{"type":"boolean","default":true}}}',
+ '{"provider":"openai","model":"gpt-4o","max_iterations":20,"thinking":true}',
  1);

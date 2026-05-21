@@ -1416,7 +1416,7 @@ Project "my-app" (project_id=1)
 
 │   │
 
-│   └── /home/sandbox/.opencode/          ← bind mount: 项目级运行时数据（Skills/配置）
+│   └── /home/sandbox/.anseragent/          ← bind mount: 项目级运行时数据（Skills/配置）
 
 │
 
@@ -1796,7 +1796,7 @@ Worker 启动
 
     │       │   ├── 容器 running → 检查 /workspace/issue-{id} worktree 是否存在
 
-    │       │   │   ├── 存在 → 检查 opencode 进程是否存活，是则重新 Attach stdout
+    │       │   │   ├── 存在 → 检查 anserflow 进程是否存活，是则重新 Attach stdout
 
     │       │   │   └── 不存在 → 重建 worktree 并重新入队
 
@@ -1806,7 +1806,7 @@ Worker 启动
 
     │       │
 
-    │       └── 若 opencode 已退出 → 检查 exit code
+    │       └── 若 anserflow 已退出 → 检查 exit code
 
     │           ├── exit 0 → commit + PR → in_review
 
@@ -1824,7 +1824,7 @@ Worker 启动
 
             │
 
-            ├── opencode 进程存活（paused by SIGSTOP）→ 重新 Attach + 订阅控制频道
+            ├── anserflow 进程存活（paused by SIGSTOP）→ 重新 Attach + 订阅控制频道
 
             └── 进程已不存在 → Issue → backlog + 记录异常
 
@@ -1850,7 +1850,7 @@ Worker 启动
 
 > - **容器保护**：`AutoRemove: false` 确保容器不会随 Docker 重启被自动清理
 
-> - **暂停/恢复**依赖 opencode 进程 PID + SIGSTOP/SIGCONT 信号，容器重启后 PID 变化，需要重建 worktree 上下文
+> - **暂停/恢复**依赖 anserflow 进程 PID + SIGSTOP/SIGCONT 信号，容器重启后 PID 变化，需要重建 worktree 上下文
 
 > - **issuess 表不再有 sandbox_container_id 字段**：改为通过 `project_id → projects.sandbox_container_id` 间接获取
 
@@ -1892,7 +1892,7 @@ Worker 启动
 
 | Asynq 已出队未完成任务 | MySQL（Issue 状态） | ✅ 不丢失 | 任务出队时 Issue 已标记 `in_progress`，Worker 重启时 `RecoverRunningIssues` 兜底 |
 
-| 容器内进程内存状态 | 容器内存 | ❌ 丢失 | 容器停止 → opencode 进程上下文丢失，回退到 `todo` 重试 |
+| 容器内进程内存状态 | 容器内存 | ❌ 丢失 | 容器停止 → anserflow 进程上下文丢失，回退到 `todo` 重试 |
 
 **部署要求**（config.yaml 或部署文档注明）：
 
@@ -1950,39 +1950,33 @@ docker build -t anserflow/sandbox:latest -f docker/sandbox/Dockerfile .
 
 ```dockerfile
 
+FROM alpine:3.21 AS builder
+
+# 编译阶段（如果需要）
+FROM golang:1.24-alpine AS compiler
+WORKDIR /build
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o anserflow ./cmd/anserflow
+
+# 最终镜像
 FROM alpine:3.21
 
-RUN apk add --no-cache \
-
-    nodejs npm \
-
-    python3 py3-pip \
-
-    git \
-
-    curl \
-
-    bash \
-
-    && rm -rf /var/cache/apk/*
+RUN apk add --no-cache git bash ca-certificates
 
 RUN adduser -D -u 1000 sandbox
 
-# anserflow — 自研 AI 编码代理（Go 静态编译二进制）
-
+# 直接复制编译好的二进制
 COPY --from=compiler /build/anserflow /usr/local/bin/anserflow
-
 RUN chmod +x /usr/local/bin/anserflow
 
-RUN mkdir -p /workspace && chown sandbox:sandbox /workspace
+RUN mkdir -p /workspace /home/sandbox/.anseragent
+RUN chown sandbox:sandbox /workspace /home/sandbox/.anseragent
 
 WORKDIR /workspace
+USER sandbox
 
 COPY entrypoint.sh /entrypoint.sh
-
 RUN chmod +x /entrypoint.sh
-
-USER sandbox
 
 ENTRYPOINT ["/entrypoint.sh"]
 
@@ -2012,9 +2006,9 @@ ENTRYPOINT ["/entrypoint.sh"]
 
 ```
 
-> **opencode 配置注入**：已由 `RuntimeAdapter` 接口替代（见 [04b-sandbox-runtime.md](04b-sandbox-runtime.md) §RuntimeManager）。API Key AES-256 加密存储，Worker 解密后通过环境变量注入容器，不落盘。
+> **anserAgent 配置注入**：已由 `RuntimeAdapter` 接口替代（见 [04b-sandbox-runtime.md](04b-sandbox-runtime.md) §RuntimeManager）。API Key AES-256 加密存储，Worker 解密后通过环境变量注入容器，不落盘。
 
-> 预估镜像大小约 400MB。`.dockerignore` 排除 node_modules/ / .git/ / dist/ / .next/ / *.log。
+> 预估镜像大小约 50MB（移除 Node.js/Python 后）。`.dockerignore` 排除 node_modules/ / .git/ / dist/ / .next/ / *.log。
 
 ### 2.3 Go Docker SDK
 

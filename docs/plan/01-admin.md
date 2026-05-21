@@ -287,8 +287,7 @@ func (h *HotConfig) StartWatch(ctx context.Context) {
 ├── 运行时选择（下拉，根据 runtimes 表动态渲染）
 │   ├── 选择后根据 config_schema 动态渲染配置表单
 │   ├── API Key 加密字段（前端显示 ****，后端 AES 加解密）
-│   └── 不同运行时字段不同（opencode: provider/model/agent/thinking）
-│                          （hermes: provider/model/personality）
+│   └── 不同运行时字段不同（anseragent: provider/model/thinking）
 └── Skills 绑定管理（继承运行时默认 + Agent 级覆盖）
 ```
 
@@ -358,7 +357,7 @@ func main() {
 
 ---
 
-### 4.4 Next.js SPA 模式
+### 4.2 Next.js SPA 模式
 
 后台管理前端（`admin/`）使用静态导出模式，不依赖 Node.js 服务端：
 

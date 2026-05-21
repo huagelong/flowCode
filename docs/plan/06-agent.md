@@ -198,7 +198,7 @@ internal/agent/
 
 ## 沙箱
 - Docker SDK for Go
-- 运行时：opencode / hermes
+- 运行时：anserAgent
 ```
 
 **L3 — 任务 Skill/SOP**（可复用流程，例如 `L3-skills/react-auth/SKILL.md`）：

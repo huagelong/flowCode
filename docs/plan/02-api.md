@@ -1760,7 +1760,7 @@ sequenceDiagram
 | Agent 感知 | Agent 收到新会话的首条消息时，其 System Prompt 追加 "这是一个新讨论主题的开端" |
 | `/backlog` 作用域 | `/backlog` 指令仅收集当前 session 内的讨论上下文 |
 
-### 10.2 Agent 自动执行（backlog→todo→in_progress→in_review→done）
+### 3.2 Agent 自动执行（backlog→todo→in_progress→in_review→done）
 
 ```mermaid
 sequenceDiagram
@@ -1881,7 +1881,7 @@ Issue 的时间线面板允许自然人在任意阶段追加提示词，直接�
 │  │ ─────────────────────────────────────────────      │  │
 │  │ 12:09  张三     提示词: "login.tsx 的密码框需要     │  │
 │  │                 autocomplete='new-password'"        │  │
-│  │ 12:09  system   收到人工提示词，重新执行 opencode    │  │
+│  │ 12:09  system   收到人工提示词，重新执行 anserflow    │  │
 │  │ 12:12  agent    修复完成: lint + test 全部通过      │  │
 │  └───────────────────────────────────────────────────┘  │
 │                                                         │
@@ -1897,9 +1897,9 @@ Issue 的时间线面板允许自然人在任意阶段追加提示词，直接�
 - Issue 服务收到人工提示词后调用 `prompt_optimizer.Enhance()`（Eino 优化改写）
 - 优化后的提示词写入时间线，触发 Issue 重新进入 in_progress
 - Worker 检测到已有 worktree（`project_id → 容器 → /workspace/issue-{id}`），在 worktree 内继续执行
-- opencode 基于上次工作区状态 + 优化提示词继续编码
+- anserflow 基于上次工作区状态 + 优化提示词继续编码
 - Issue done 后清理 worktree（`git worktree remove`），容器常驻不销毁
-- opencode 重新执行时保留之前的 `issue_timeline` 日志记录
+- anserflow 重新执行时保留之前的 `issue_timeline` 日志记录
 
 **GitHub Webhook 处理器**：
 

@@ -332,7 +332,7 @@ packages/shared-ui/
 **时间线数据流**：
 
 ```
-沙箱 opencode stdout
+沙箱 anserflow stdout
     │
     ▼
 Worker streamLogs() 捕获
