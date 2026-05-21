@@ -265,8 +265,8 @@ const (
 
 ```go
 // 1. 首次执行
-iter := runner.Query(ctx, "分析并实现 JWT 认证",
-    adk.WithCheckPointID("issue-42"),
+iter := runner.Query(ctx, input,
+    WithCheckPointID("issue-42"),
 )
 
 for {
@@ -282,7 +282,7 @@ for {
         approved := askUserApproval()
 
         // 4. 恢复执行（可在不同进程/机器）
-        iter, _ = runner.Resume(ctx, "issue-42", &adk.ResumeParams{
+        iter, _ = runner.Resume(ctx, "issue-42", &ResumeParams{
             Targets: map[string]any{
                 interruptID: &ApprovalResult{Approved: approved},
             },
@@ -365,7 +365,8 @@ type Runner struct {
 func NewRunner(ctx context.Context, config RunnerConfig) *Runner
 
 // Query 首次执行或从新起点执行
-func (r *Runner) Query(ctx context.Context, query string, opts ...RunOption) *AsyncIterator[*AgentEvent]
+// input 携带完整的查询上下文（Query / Context / Mode / Tags 等）
+func (r *Runner) Query(ctx context.Context, input *AgentInput, opts ...RunOption) *AsyncIterator[*AgentEvent]
 
 // Resume 从中断点恢复执行
 func (r *Runner) Resume(ctx context.Context, checkPointID string, params *ResumeParams) (*AsyncIterator[*AgentEvent], error)
@@ -835,17 +836,7 @@ func (s *SkillImprover) needsImprovement(req ImproveRequest) bool {
 
 ### 10.1 Agent 统一接口
 
-```go
-// core/interface.go — 实现 Eino ADK Agent 接口
-
-type Agent interface {
-    Name(ctx context.Context) string
-    Description(ctx context.Context) string
-    Run(ctx context.Context, input *AgentInput) *AsyncIterator[*AgentEvent]
-}
-```
-
-anserAgent 作为 ChatModelAgent 实现该接口，Workflow Agents（Sequential/Parallel/Loop）也实现同一接口，使得编排器可以统一调度任意 Agent 类型。
+> 接口定义详见 [二、设计基础 — Agent 统一接口](#二设计基础--agent-统一接口)。anserAgent 作为 ChatModelAgent 实现该接口，Workflow Agents（Sequential/Parallel/Loop）也实现同一接口，使得编排器可以统一调度任意 Agent 类型。
 
 ### 10.2 anserAgent 实现
 
@@ -915,8 +906,8 @@ func (a *anserAgent) Run(
                 a.memory.Store(ctx, Memory{
                     Layer: LayerL4, Content: resp.Content, Tags: input.Tags,
                 })
-                // Skill 结晶化评估（异步）
-                go a.skills.MaybeCrystallize(ctx, input, resp)
+                // Skill 结晶化评估（异步，使用独立 context 防止父 ctx 取消后丢失）
+                go a.skills.MaybeCrystallize(context.Background(), input, resp)
                 return
             }
 
@@ -1026,6 +1017,8 @@ func (o *GroupOrchestrator) OnMessage(ctx context.Context, msg Message) {
     }
 
     // 创建 Runner，配置 CheckPointStore
+    // 注：Runner 为轻量对象，可按每次消息创建；若需跨消息复用中断恢复，
+    // 应在 Orchestrator 级别缓存 Runner 实例并复用同一 CheckPointID
     runner := NewRunner(ctx, RunnerConfig{
         Agent:           agent,
         CheckPointStore: o.checkPointStore,
