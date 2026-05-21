@@ -306,31 +306,66 @@ for {
 
 | 模式 | 触发时机 | anserFlow 场景 |
 |------|---------|---------------|
-| **审批模式** | 工具调用前中断，等待确认 | `git push` / `DB migration` 执行前需人工审批 |
+| **群聊审批模式** | 编码完成后 commit 前中断，在群聊展示 diff 等人工审批 | `git push` / `DB migration` 执行前，Agent 在群聊发变更摘要 + 审批按钮 |
 | **审查编辑模式** | 执行前审查并可原地编辑工具参数 | Agent 生成的代码在 `git commit` 前供人工 review 和修改 |
 | **追问模式** | Agent 发现信息不足主动中断追问 | Issue 需求不明确时，Agent 在 IM 中追问澄清 |
 
-### 6.2 审批模式示例
+### 6.2 群聊审批模式（合并审批）
+
+编码完成后、push 前，Agent 通过 HITL 中断在群聊中发起合并审批，展示变更摘要、diff 统计和质量门禁结果，由人工在群聊中一键批准或拒绝。
+
+**审批消息格式**：
+
+```
+🤖 anserAgent
+┌──────────────────────────────────────────┐
+│ Issue #42 编码完成，请求审批合并           │
+│                                           │
+│ 📋 变更摘要                               │
+│  • src/login.tsx     +86行  新增登录页    │
+│  • src/api/auth.ts   +32行  Token 刷新    │
+│  • test/login.test.ts +45行 补充测试      │
+│                                           │
+│ 📊 质量门禁                               │
+│  ✅ 编译通过  ✅ Lint通过  ✅ 测试 4/4    │
+│                                           │
+│ 📎 [查看完整 Diff]   📎 [查看测试报告]     │
+│                                           │
+│ [✅ 批准合并]  [❌ 拒绝]  [💬 提修改意见]  │
+└──────────────────────────────────────────┘
+```
+
+**实现方式**：将 `git push` 工具包装为可审批版本，Agent commit 后调用 push 前触发中断，由 Worker 构建审批消息推送到群聊。人工点击按钮后通过 Runner.Resume 恢复执行：
+
+- **批准** → git push → squash merge → git worktree remove → Issue → done
+- **拒绝** → Issue → todo（保留 worktree + 分支，待重试）
+- **提意见** → 人工输入修改意见 → Agent 继续修改 → 重新发起审批
 
 ```go
-// hitl/approval.go — 将任意 Tool 包装为可审批的版本
+// hitl/approval.go — 将 git push 包装为群聊可审批的版本
 
-type ApprovableTool struct {
+type ChatApprovalTool struct {
     tool.InvokableTool
-    requireApproval func(input string) bool  // 判断是否需要审批
+    chatSender func(msg ChatApprovalMessage) error  // 发送群聊审批消息
 }
 
-func (t *ApprovableTool) InvokableRun(ctx context.Context, input string) (string, error) {
-    if t.requireApproval(input) {
-        // 中断执行，等待审批
-        return "", &InterruptError{
-            InterruptID:   generateInterruptID(),
-            InterruptInfo: fmt.Sprintf("即将执行: %s(%s)，是否确认？", t.Info().Name, input),
-        }
+func (t *ChatApprovalTool) InvokableRun(ctx context.Context, input string) (string, error) {
+    // 1. 构建审批消息内容（变更摘要 + diff 统计 + 质量门禁）
+    approvalMsg := t.buildApprovalMessage(input)
+    
+    // 2. 发送到群聊
+    if err := t.chatSender(approvalMsg); err != nil {
+        return "", err
     }
-    return t.InvokableTool.InvokableRun(ctx, input)
+    
+    // 3. 返回 InterruptError，等待人工在群聊中点按钮
+    return "", &InterruptError{
+        InterruptID:   generateInterruptID(),
+        InterruptInfo: approvalMsg,
+    }
 }
-```
+
+> **与 Agent 主循环的衔接**：ChatModelAgent 的 `executeTool` 方法（见 [10.2 anserAgent 实现](#102-anseragent-实现)）检测到 `InterruptError` 后，不会将其作为普通错误处理，而是构造 `AgentEvent{Action: {Interrupted: &InterruptContext{...}}}` 并停止当前 ReAct 循环。调用方通过 `Runner.Query` 的事件迭代器收到该事件后，由 Worker 构建群聊审批消息（含变更摘要 + 按钮）推送到 IM。人工点击按钮后通过 `Runner.Resume` 传入审批结果继续执行。
 
 ### 6.3 审查编辑模式
 
@@ -375,17 +410,16 @@ func (r *Runner) Resume(ctx context.Context, checkPointID string, params *Resume
 ### 7.2 Runner 工作流程
 
 ```
-Runner.Query(query, checkPointID)
+Runner.Query(input, checkPointID)
     │
     ├─► 1. 创建/加载 CheckPoint
-    ├─► 2. 构建 AgentInput
-    ├─► 3. Agent.Run(ctx, input) → AsyncIterator
+    ├─► 2. Agent.Run(ctx, input) → AsyncIterator
     │       │
     │       ├─► AgentEvent{Output}   → 流式推送给调用方
     │       ├─► AgentEvent{Action}   → 记录 Token 用量
     │       └─► AgentEvent{Interrupted} → 保存 CheckPoint → 返回控制权给调用方
     │
-    └─► 4. 完成后删除 CheckPoint
+    └─► 3. 完成后删除 CheckPoint
 
 Runner.Resume(checkPointID, params)
     │
@@ -402,8 +436,8 @@ Runner.Resume(checkPointID, params)
 - **CheckPointStore**：支持 InMemory（开发调试）/ Redis（生产环境）/ MySQL（持久化）三种实现
 
 **anserFlow 场景对应**：
-- 群聊调度：`Runner.Query(sessionID)` → 流式推送到 IM
-- 沙箱执行：`Runner.Query(issueID)` → 中断 → `Runner.Resume(issueID, approval)` → 继续
+- 群聊调度：`Runner.Query(input, WithCheckPointID(sessionID))` → 流式推送到 IM
+- 沙箱执行：`Runner.Query(input, WithCheckPointID(issueID))` → 中断 → `Runner.Resume(issueID, approval)` → 继续
 
 ---
 
@@ -644,11 +678,11 @@ type Memory struct {
 type MemoryLayer string
 
 const (
-    LayerL0 MetaRules    MemoryLayer = "L0"  // 元规则
-    LayerL1 InsightIndex MemoryLayer = "L1"  // 记忆索引
-    LayerL2 GlobalFacts  MemoryLayer = "L2"  // 全局事实
-    LayerL3 SkillSOP     MemoryLayer = "L3"  // 任务 Skills / SOPs
-    LayerL4 SessionArchive MemoryLayer = "L4" // 会话归档
+    LayerL0 MemoryLayer = "L0"  // 元规则
+    LayerL1 MemoryLayer = "L1"  // 记忆索引
+    LayerL2 MemoryLayer = "L2"  // 全局事实
+    LayerL3 MemoryLayer = "L3"  // 任务 Skills / SOPs
+    LayerL4 MemoryLayer = "L4"  // 会话归档
 )
 ```
 
@@ -766,12 +800,16 @@ func (g *SkillGenerator) Crystallize(ctx context.Context, record ExecutionRecord
 
 func (g *SkillGenerator) shouldCrystallize(record ExecutionRecord) bool {
     switch {
-    case record.IsNewTaskType:
-        return true
-    case record.ToolCallCount >= 5:
-        return true
-    case record.TokenUsed > 30000:
-        return true
+    case record.SameTaskSuccessCount >= 3:
+        return true    // 对应 R01: 同类 Issue 执行 ≥3 次成功
+    case record.IsRecoveredFromFailure:
+        return true    // 对应 R02: 失败后重试成功
+    case record.AffectedFileCount >= 3:
+        return true    // 对应 R03: 跨 ≥3 个文件的重构
+    case record.TokenUsed > 50000:
+        return true    // 对应 R04: 单次执行 Token > 50k
+    case record.IsManualRequest:
+        return true    // 对应 R05: 人工 /skill save
     default:
         return false
     }
@@ -1085,12 +1123,15 @@ func (s *SandboxOrchestrator) ExecuteIssue(ctx context.Context, issue *Issue) er
             break
         }
 
-        // 处理中断事件（如 commit 前审批）
+        // 处理中断事件（编码完成后群聊审批）
         if event.Action != nil && event.Action.Interrupted != nil {
             interruptID := event.Action.Interrupted.ID
-            // 将中断信息推送给用户，等待审批
-            approval := s.waitForApproval(ctx, event.Action.Interrupted.Info)
-            // 恢复执行
+            // 构建群聊审批消息（含变更摘要 + diff 统计 + 质量门禁 + 按钮）
+            approvalMsg := s.buildChatApproval(issue, event.Action.Interrupted.Info)
+            s.sendChatApproval(ctx, issue.SourceGroupID, approvalMsg)
+            // 等待人工在群聊中点按钮 → 回调 Resume
+            approval := s.waitForChatApproval(ctx, interruptID)
+            // 恢复执行：批准 → push + merge；拒绝 → todo
             iter, _ = runner.Resume(ctx, checkPointID, &ResumeParams{
                 Targets: map[string]any{interruptID: approval},
             })
@@ -1128,7 +1169,7 @@ func (s *SandboxOrchestrator) ExecuteIssue(ctx context.Context, issue *Issue) er
 │  Hub.OnMessage()                                       │
 │       │                                                │
 │       ▼                                                │
-│  Runner.Query(mode=orchestrate, checkPointID)          │
+│  Runner.Query(input, WithCheckPointID(sessionID))          │
 │       │                                                │
 │       ├── Agent.Run() ──► AsyncIterator[*AgentEvent]  │
 │       │     ├── MemoryManager ──► memory/ (L0~L4)     │
@@ -1140,7 +1181,7 @@ func (s *SandboxOrchestrator) ExecuteIssue(ctx context.Context, issue *Issue) er
 │  Worker（Asynq）                                      │
 │       │                                                │
 │       ▼                                                │
-│  Runner.Run(mode=execute, checkPointID)               │
+│  Runner.Query(input, WithCheckPointID(issueID))               │
 │       │                                                │
 │       ├── Agent.Run() ──► AsyncIterator[*AgentEvent]  │
 │       │     ├── MemoryManager ──► L2 事实 + L3 Skills │

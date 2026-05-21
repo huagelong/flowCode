@@ -390,13 +390,13 @@ func init() {
 
     defaultManager.prompts["system.issue.stopped"] = `Issue #%d 执行已停止`
 
-    defaultManager.prompts["system.issue.pr_submitted"] = `Issue #%d PR 已提交，等待审核`
+    defaultManager.prompts["system.issue.pr_submitted"] = `Issue #%d 编码完成，等待审批`
 
     defaultManager.prompts["system.issue.failed"] = `Issue #%d 执行失败: %s`
 
     defaultManager.prompts["system.issue.done"] = `Issue #%d 已完成 ✅`
 
-    defaultManager.prompts["system.issue.pr_rejected"] = `Issue #%d PR 被拒绝，已退回 todo`
+    defaultManager.prompts["system.issue.pr_rejected"] = `Issue #%d 审批未通过，已退回 todo`
 
 }
 
@@ -490,15 +490,15 @@ Issue 状态流转逻辑分散在 `IssueService`、`Worker`、`Scheduler`、`Web
 
 | `todo` | `in_progress` | Scheduler 分配 | 群聊通知 + 时间线 + 通知被分配人 |
 
-| `in_progress` | `in_review` | Worker PR 提交 | 群聊通知 + 时间线 + 通知 Reviewer |
+| `in_progress` | `in_review` | 编码完成，Agent 发起群聊审批 | 群聊通知（含 diff 摘要 + 审批按钮）+ 时间线 |
 
 | `in_progress` | `paused` | 人工暂停 | 群聊通知 + 时间线 |
 
 | `in_progress` | `todo` | Worker 执行失败 | 群聊通知 + 时间线 + retry_count++ |
 
-| `in_review` | `done` | GitHub Webhook merge | 群聊通知 + 时间线 |
+| `in_review` | `done` | 群聊中人工点「批准」→ push + auto-merge | 群聊通知 + 时间线 + worktree 清理 |
 
-| `in_review` | `todo` | GitHub Webhook reject | 群聊通知 + 时间线（沙箱保留） |
+| `in_review` | `todo` | 群聊中人工点「拒绝」 | 群聊通知 + 时间线（worktree 保留待重试） |
 
 | `todo` | `backlog` | 人工退回 | 时间线 |
 
@@ -1440,11 +1440,11 @@ docker exec anserflow-project-1 git worktree add /workspace/issue-42 -b feat/iss
 
 docker exec anserflow-project-1 anserflow agent run --workdir /workspace/issue-42 --prompt "实现登录页"
 
-# Issue 完成后清理（先 push 分支，再 remove worktree）
+# Issue 审批通过后（push + merge → 清理 worktree）
 
 docker exec anserflow-project-1 git -C /workspace/issue-42 push origin feat/issue-42
 
-# PR merge 后
+# Worker 执行 squash merge 后清理
 
 docker exec anserflow-project-1 git worktree remove /workspace/issue-42
 
@@ -1550,21 +1550,33 @@ docker exec anserflow-project-1 git branch -D feat/issue-42
 
 │  │  │                                                  │  │
 
-│  │  └── 退出码 + 工作区检查 → 判定通过/失败            │  │
+│  │  ├── 通过 → 进入群聊审批流程（见 Step 6）              │  │
+
+│  │  └── 失败 → 写时间线 → Issue → todo                   │  │
 
 │  │                                                    │  │
 
-│  │  Step 6: 收尾                                      │  │
+│  │  Step 6: 群聊审批 + 合并                            │  │
 
 │  │  ├── anserAgent 检查通过:                            │  │
 
-│  │  │   ├── git add → commit → push（在 worktree 内）│  │
+│  │  │   ├── git add → commit（在 worktree 内）        │  │
 
-│  │  │   ├── 创建 PR                                   │  │
+│  │  │   ├── [HITL 中断] 发送群聊审批消息              │  │
 
-│  │  │   ├── 更新 Issue → in_review                    │  │
+│  │  │   │   ├── 内容：变更摘要 + Diff 统计 + 质量门禁  │  │
 
-│  │  │   └── git worktree remove + branch -D（清理）   │  │
+│  │  │   │   └── 按钮：[✅ 批准合并] [❌ 拒绝] [💬 意见]│  │
+
+│  │  │   ├── 人工点「批准」→ git push + auto-merge    │  │
+
+│  │  │   │   ├── Worker 执行 squash merge 到 main       │  │
+
+│  │  │   │   ├── 更新 Issue → done                     │  │
+
+│  │  │   │   └── git worktree remove + branch -D       │  │
+
+│  │  │   └── 人工点「拒绝」→ Issue → todo（保留 worktree）│
 
 │  │  ├── anserAgent 检查失败:                            │  │
 
@@ -1573,10 +1585,6 @@ docker exec anserflow-project-1 git branch -D feat/issue-42
 │  │  │   ├── Issue → todo（保留 worktree 待重试）      │  │
 
 │  │  │   └── 等待人工提示词 → 重试                     │  │
-
-│  │  ├── Issue done（PR merge）:                       │  │
-
-│  │  │   └── git worktree remove + branch -D            │  │
 
 │  │  └── 项目容器不销毁（常驻，给其他 Issue 复用）      │  │
 
@@ -1632,17 +1640,41 @@ anserAgent 通过 **docker exec 的 stdout 流 + 退出码** 与 Worker 通信�
 
                                     │                               │
 
-exit 0                              │ 检查: 退出码=0                 │
+exit 0                              │ 检查: 退出码=0 + 质量门禁     │
 
                                     │       worktree 有变更          │
 
                                     │                               │
 
-                                    │ git commit + push + PR        │
+                                    │ git commit                    │
 
-                                    │ git worktree remove           │
+                                    │ issue → in_review ────────────→ "编码完成，等待审批"
 
-                                    │ issue → in_review ────────────→ "PR 已提交，等待审核"
+                                    │                               │
+
+                                    │ [HITL 中断] 发送群聊审批消息   │
+
+                                    │ ├─ 变更摘要 (diff stat)        │
+
+                                    │ ├─ 质量门禁结果               │
+
+                                    │ └─ [批准/拒绝/意见] 按钮      │
+
+                                    │                               │
+
+                                    │ 用户点「批准」→ git push      │
+
+                                    │              → squash merge   │
+
+                                    │              → worktree remove│
+
+                                    │ issue → done ─────────────────→ "已合并到 main ✅"
+
+                                    │                               │
+
+                                    │ 用户点「拒绝」                │
+
+                                    │ issue → todo ─────────────────→ "审批未通过，已退回"
 
                                     └───────────────────────────────┘
 

@@ -12,9 +12,9 @@ main ─────────────────────────
 
 | 规则 | 说明 |
 |------|------|
-| `main` 保护 | 禁止直接 push，必须通过 PR 合并 |
-| 功能分支 | `feature/<描述>` / `fix/<描述>` / `docs/<描述>` |
-| PR 要求 | 至少 1 人 Review + CI 全绿 |
+| `main` 保护 | 禁止直接 push，由 Worker 在群聊审批通过后执行 squash merge |
+| 功能分支 | `feat/issue-<id>`（AnserFlow 自动生成） / `feature/<描述>` / `fix/<描述>` |
+| 审批方式 | 群聊审批：Agent 编码完成 → 发变更摘要到群聊 → 人工点「批准」→ 自动 merge |
 | Commit 规范 | [Conventional Commits](https://www.conventionalcommits.org/zh-hans/)：`feat:` / `fix:` / `docs:` / `refactor:` / `ci:` |
 | 发布标签 | `vX.Y.Z` 触发 CD 构建与发布 |
 | 合并方式 | Squash & Merge（保持 main 线性历史） |
@@ -36,14 +36,14 @@ ci: 添加 Next.js lint 检查 workflow
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  PR → main                                                    │
+│  分支 push → main                                             │
 │  ┌──────────────────────────────────────────────────────┐    │
-│  │  ci.yml (每次 push PR)                                │    │
+│  │  ci.yml (push 分支 / push main)                       │    │
 │  │  ├── Go lint + test + build                          │    │
 │  │  ├── Next.js lint + type-check + build (admin)       │    │
 │  │  └── Next.js lint + type-check + build (client)      │    │
 │  └──────────────────────────────────────────────────────┘    │
-│                           ↓ 合并                              │
+│                           ↓ 群聊审批 → squash merge            │
 ├──────────────────────────────────────────────────────────────┤
 │  main → 发布                                                  │
 │  ┌──────────────────────────────────────────────────────┐    │
@@ -255,10 +255,11 @@ jobs:
 
 | 规则 | 值 |
 |------|-----|
-| Require a pull request before merging | ✅ |
-| Require approvals | 1 |
 | Require status checks to pass | ✅ `ci.yml` (go / admin / client) |
-| Require conversation resolution | ✅ |
-| Do not allow bypassing | ✅ (包括 admins) |
+| Allow squash merging | ✅ |
+
+> **说明**：合并审批由 AnserFlow 群聊审批流程接管，不依赖 GitHub 分支保护的 Review 规则。CI 通过 + 群聊审批 = 自动 squash merge。
+
+> **Worker 权限**：Worker 使用的 GitHub Token 需具备绕过分支保护的权限（Repository Admin），以便在群聊审批通过后直接执行 squash merge。
 
 

@@ -1,6 +1,6 @@
 ---
 name: anser-coder
-description: AnserFlow 沙箱编码执行规范。opencode 在 Docker 沙箱中执行 Issue 编码任务时必须遵守的代码风格、提交规范、PR 格式和质量标准。
+description: AnserFlow 沙箱编码执行规范。opencode 在 Docker 沙箱中执行 Issue 编码任务时必须遵守的代码风格、提交规范、群聊审批摘要格式和质量标准。
 is_builtin: true
 ---
 
@@ -8,7 +8,7 @@ is_builtin: true
 
 ## 目标
 
-作为 AnserFlow 默认内置 Skill，定义 opencode 在 Docker 沙箱中执行 Issue 编码任务时的行为规范。确保产出代码风格一致、提交历史清晰、PR 格式标准。
+作为 AnserFlow 默认内置 Skill，定义 opencode 在 Docker 沙箱中执行 Issue 编码任务时的行为规范。确保产出代码风格一致、提交历史清晰、群聊审批摘要格式标准。
 
 ## 编码原则
 
@@ -59,44 +59,34 @@ type 枚举：
 - 一个提交只做一件事；如果 Issue 涉及多个独立改动，拆分为多个提交。
 - 不提交调试代码、注释掉的代码、`console.log`/`fmt.Println` 等临时代码。
 
-## PR 格式
+## 群聊审批摘要
 
-### 标题
+编码完成后，Agent 在群聊中发起合并审批，展示变更摘要。
 
-```text
-[#<issue_id>] <简短描述>
+### 审批消息格式
+
+```
+Issue #<id> 编码完成，请求审批合并
+
+📋 变更摘要
+• <文件路径>    +<行数>行  <变更说明>
+• <文件路径>    -<行数>行  <变更说明>
+
+📊 质量门禁
+✅ 编译通过  ✅ Lint通过  ✅ 测试 N/N → 全部通过为 ✅，有失败为 ❌
+
+📎 [查看完整 Diff]
 ```
 
-示例：`[#12] 实现 Issue 状态变更群聊通知`
+### 摘要要求
 
-### 描述模板
-
-```markdown
-## 关联 Issue
-
-Closes #<issue_id>
-
-## 变更内容
-
-- <变更点 1>
-- <变更点 2>
-
-## 验证方式
-
-- [ ] <验证步骤 1>
-- [ ] <验证步骤 2>
-
-## 截图/日志（如适用）
-
-<粘贴关键截图或终端输出>
-```
-
-### PR 要求
-
-- PR 描述必须关联 Issue 编号（`Closes #xx`）。
-- 列出所有变更点和验证步骤。
-- 不含合并冲突、不包含无关文件变更。
-- 如果有数据库迁移，在描述中单独说明。
+- 列出所有变更文件及其增删行数，一行一个文件
+- 质量门禁必须如实反映：lint / test 有失败时不发起审批
+- 涉及 DB schema 变更时加 ⚠️ 标记并单独说明
+- 合并后自动 squash merge 到 main，commit message 遵循 Conventional Commits：
+  ```
+  <type>: <描述> (Closes #<issue_id>)
+  ```
 
 ## 代码风格
 
@@ -122,7 +112,7 @@ Closes #<issue_id>
 3. **测试通过**：运行受影响的测试套件，不引入新的失败用例。
 4. **无遗留调试代码**：grep 确认无 `fmt.Println`、`console.log`、`debugger` 等临时代码。
 
-以上任一不通过，不提交 PR，在 Issue 时间线中记录失败原因。
+以上任一不通过，不发起群聊审批，在 Issue 时间线中记录失败原因。
 
 ## 执行边界
 
