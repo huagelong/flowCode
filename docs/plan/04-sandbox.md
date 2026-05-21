@@ -168,53 +168,7 @@ Hub 路由层统一根据 `HasAgentMember()` 决定是否调用 Agent 组件，�
 
 Eino 使用 `config.yaml` 中 `llm` 配置段统一管理多 Agent 的模型连接：
 
-```go
-
-// internal/agent/agent_init.go
-
-package agent
-
-import (
-
-    "github.com/cloudwego/eino/components/model"
-
-    "github.com/cloudwego/eino/schema"
-
-    "github.com/cloudwego/eino-ext/components/model/openai"
-
-)
-
-var chatModel model.ChatModel
-
-func InitEino(cfg *config.EinoConfig) error {
-
-    var err error
-
-    chatModel, err = openai.NewChatModel(context.Background(), &openai.ChatModelConfig{
-
-        APIKey:      cfg.APIKey,
-
-        BaseURL:     cfg.BaseURL,
-
-        Model:       cfg.Model,
-
-        MaxTokens:   cfg.MaxTokens,
-
-        Temperature: &cfg.Temperature,
-
-        Timeout:     cfg.Timeout,
-
-    })
-
-    return err
-
-}
-
-// GetChatModel 返回初始化的模型实例（单例）
-
-func GetChatModel() model.ChatModel { return chatModel }
-
-```
+**实现代码**: [sandbox-code-examples.md §Eino 初始化](../../reference/sandbox-code-examples.md#eino-初始化与配置)
 
 ### Agent 运行时配置
 
@@ -280,165 +234,17 @@ Worker (沙箱启动时)
 
 ### ChatModel 调用示例
 
-```go
-
-// internal/agent/group_discuss.go — Agent 参与群聊讨论
-
-// 现由 anserAgent 统一编排，此处仅保留调用入口
-
-func (o *GroupOrchestrator) InvokeAgent(
-
-    ctx context.Context,
-
-    agent *model.Agent,
-
-    messages []*schema.Message,  // 群聊历史上下文
-
-) (*schema.Message, error) {
-
-    // 委托给 anserAgent（详见 06-agent.md）
-
-    resp, err := o.anserAgent.Invoke(ctx, AgentInput{
-
-        Context:  messages,
-
-        Mode:     ModeOrchestrate,
-
-        Tags:     []string{"group_discuss"},
-
-    })
-
-    if err != nil {
-
-        return nil, fmt.Errorf("anserAgent invoke failed: %w", err)
-
-    }
-
-    return &schema.Message{Content: resp.Content}, nil
-
-}
-
-```
+**实现代码**: [sandbox-code-examples.md §ChatModel 调用](../../reference/sandbox-code-examples.md#chatmodel-调用示例)
 
 ### Tool / Skill 抽象
 
-```go
-
-// internal/agent/skill_loader.go — Skills 加载为 anserAgent Tool
-
-type SkillLoader struct {
-
-    skillRepo *repository.SkillRepo
-
-}
-
-func (sl *SkillLoader) LoadAsTools(
-
-    ctx context.Context,
-
-    agentID uint,
-
-) ([]tool.InvokableTool, error) {
-
-    skills, err := sl.skillRepo.FindEnabledByAgent(ctx, agentID)
-
-    if err != nil {
-
-        return nil, err
-
-    }
-
-    tools := make([]tool.InvokableTool, 0, len(skills))
-
-    for _, skill := range skills {
-
-        // 每个 Skill 注册为一个 anserAgent Tool
-
-        tools = append(tools, &SkillTool{
-
-            name:        skill.Name,
-
-            description: skill.Description,
-
-            definition:  skill.Definition, // Markdown 正文
-
-            handler: func(ctx context.Context, input string) (string, error) {
-
-                // 将 Skill 定义注入 System Prompt 让 LLM 遵循
-
-                return fmt.Sprintf(
-
-                    "Skill '%s' loaded. Instructions:\n%s",
-
-                    skill.Name, skill.Definition,
-
-                ), nil
-
-            },
-
-        })
-
-    }
-
-    return tools, nil
-
-}
-
-```
+**实现代码**: [sandbox-code-examples.md §Skill 加载](../../reference/sandbox-code-examples.md#tool--skill-抽象)
 
 ### Skill 两层继承（沙箱执行时）
 
 Worker 通过 RuntimeClient 向沙箱注入 Skills 配置时，合并 Runtime 默认 + Agent 独立绑定，Agent 可覆盖关闭 Runtime 继承的 Skill。Skills 以 JSON Lines 消息随任务一并发送给沙箱内运行的工具：
 
-```go
-
-// internal/agent/skill_loader.go
-
-func (sl *SkillLoader) LoadForSandbox(ctx context.Context, agent *model.Agent) ([]*model.Skill, error) {
-
-    // ① Runtime 默认 Skills（如 opencode→anser-coder）
-
-    runtimeSkills, _ := sl.skillRepo.FindEnabledByRuntime(ctx, agent.RuntimeID)
-
-    // ② Agent 独立绑定的 Skills
-
-    agentSkills, _ := sl.skillRepo.FindEnabledByAgent(ctx, agent.ID)
-
-    // ③ 合并去重：Agent 级配置覆盖 Runtime 默认（以 skill_id 为 key）
-
-    merged := make(map[uint]*model.Skill)
-
-    for _, s := range runtimeSkills {
-
-        merged[s.ID] = s
-
-    }
-
-    for _, s := range agentSkills {
-
-        merged[s.ID] = s    // Agent 级覆盖（含 enabled=false 的情况）
-
-    }
-
-    // ④ 仅返回 enabled=true 的 Skill
-
-    result := make([]*model.Skill, 0)
-
-    for _, s := range merged {
-
-        if s.Enabled {
-
-            result = append(result, s)
-
-        }
-
-    }
-
-    return result, nil
-
-}
-
-```
+**实现代码**: [sandbox-code-examples.md §Skill 两层继承](../../reference/sandbox-code-examples.md#skill-两层继承)
 
 **Skill 注入规则**：
 
@@ -490,97 +296,7 @@ func (sl *SkillLoader) LoadForSandbox(ctx context.Context, agent *model.Agent) (
 
 | `error_templates.go` | `error.backlog_no_plan` | /backlog 生成失败 | `command_handler.go` |
 
-**实现**：
-
-```go
-
-// prompts/prompt_manager.go
-
-package prompts
-
-import (
-
-    "embed"
-
-    "sync"
-
-)
-
-//go:embed *.go
-
-var promptsFS embed.FS
-
-type PromptManager struct {
-
-    mu       sync.RWMutex
-
-    prompts  map[string]string
-
-}
-
-var defaultManager *PromptManager
-
-func init() {
-
-    defaultManager = &PromptManager{prompts: make(map[string]string)}
-
-    defaultManager.loadAll()
-
-}
-
-// Get 获取提示词模板（支持占位符替换）
-
-func Get(key string, args ...interface{}) string {
-
-    defaultManager.mu.RLock()
-
-    defer defaultManager.mu.RUnlock()
-
-    tmpl, ok := defaultManager.prompts[key]
-
-    if !ok {
-
-        return key // fallback: 返回 key 本身
-
-    }
-
-    if len(args) > 0 {
-
-        return fmt.Sprintf(tmpl, args...)
-
-    }
-
-    return tmpl
-
-}
-
-// MustGet 获取提示词模板（找不到则 panic）
-
-func MustGet(key string, args ...interface{}) string {
-
-    result := Get(key, args...)
-
-    if result == key {
-
-        panic(fmt.Sprintf("prompt not found: %s", key))
-
-    }
-
-    return result
-
-}
-
-// Reload 热重载（开发/运维调试用）
-
-func Reload() {
-
-    defaultManager.mu.Lock()
-
-    defer defaultManager.mu.Unlock()
-
-    defaultManager.loadAll()
-
-}
+**实现代码**: [sandbox-code-examples.md §PromptManager](../../reference/sandbox-code-examples.md#tool--skill-抽象)
 
 ```
 
