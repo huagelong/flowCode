@@ -6,7 +6,7 @@
 
 ---
 
-## 六、AI Agent 框架：Eino + 自研封装
+## 一、AI Agent 框架：Eino + 自研封装
 
 ### 架构分层
 
@@ -1636,7 +1636,7 @@ func estimateCost(providerKey string, promptTokens, completionTokens int64) floa
 
 ---
 
-## 七、Docker 沙箱方案
+## 二、Docker 沙箱方案
 
 > 📎 沙箱运行时接口定义（SandboxManager / RuntimeManager 适配器模式）已迁至 [04b-sandbox-runtime.md](04b-sandbox-runtime.md)。本节保留架构设计与执行流程。
 
@@ -2584,7 +2584,7 @@ type GitPlatform interface {
 
 ---
 
-## 八、Skills 技能系统
+## 三、Skills 技能系统
 
 ### 8.1 两种导入方式
 

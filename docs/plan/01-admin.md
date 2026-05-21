@@ -2,7 +2,7 @@
 
 ---
 
-### 完整配置文件 (config.yaml)
+## 完整配置文件 (config.yaml)
 
 > AnserFlow 运行时所有配置集中在 `config.yaml`，由 Viper 加载。生产环境敏感字段（数据库密码、API Key 等）可通过环境变量覆盖。
 > 

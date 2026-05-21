@@ -39,6 +39,7 @@ docs/plan/
 - 所有 API 路由、数据模型、CLI 命令均为目标架构设计，未必全部在仓库中落地
 - 参考代码骨架位于 `reference/workflow-backend-skeleton/`
 - 前端完整代码示例位于 `reference/frontend-code-examples.md`
+- 数据库 DDL 位于 `docs/ddl.sql`
 - 各文件中标注的 **Phase 1** 内容属于 L1-L4 路线图范围，**Phase 2** 为远期规划
 
-> 最后更新：2026-05-20
+> 最后更新：2026-05-21

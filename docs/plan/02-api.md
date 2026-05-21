@@ -2,7 +2,7 @@
 
 ---
 
-### 框架补充说明
+## 框架补充说明
 
 > 以下为生产级 Gin 项目的标准配套设施，确保系统可维护、可观测、可扩展。
 
@@ -196,11 +196,11 @@ other = "Docker sandbox execution timed out (exceeded {{.Timeout}} seconds)"
 
 ---
 
-## 五、分布式架构设计
+## 一、分布式架构设计
 
-### 5.1 WebSocket 分布式方案
+### 1.1 WebSocket 分布式方案
 
-#### 5.1.1 架构拓扑
+#### 1.1.1 架构拓扑
 
 ```
                     ┌─────────────┐
@@ -221,7 +221,7 @@ other = "Docker sandbox execution timed out (exceeded {{.Timeout}} seconds)"
 
 **Go 库**：`github.com/gorilla/websocket` + `github.com/redis/go-redis/v9`
 
-#### 5.1.2 连接建立与频道订阅
+#### 1.1.2 连接建立与频道订阅
 
 WebSocket 连接建立时仅需认证，**不绑定任何频道**。连接建立后，客户端通过 `subscribe` 消息动态订阅感兴趣的资源频道：
 
@@ -301,7 +301,7 @@ func (h *Hub) SendToUser(userID uint, msg interface{}) {
 
 > **权限校验**：`Subscribe` 时需校验用户是否有权订阅该频道（如 `group:42` 需要用户是该群成员，`issue:7` 需要用户是关联项目的成员）。校验失败返回 `subscribe_nack`。
 
-#### 5.1.3 消息协议
+#### 1.1.3 消息协议
 
 所有 WebSocket 通信统一采用 JSON 信封格式：
 
@@ -352,14 +352,14 @@ func (h *Hub) SendToUser(userID uint, msg interface{}) {
 
 **`/new` 新会话指令**：群内自然人发送 `/new` 后，系统在当前群组内创建一个新的会话上下文（`session_id`）。新会话之前的消息不再作为 Agent 讨论的上下文窗口内容，Agent 仅感知 `/new` 之后的消息历史。这使自然人可以在同一群组内切换讨论主题，避免上下文混淆和 Token 浪费。`/new` 不清除历史消息（历史仍可滚动查看），仅重置 Agent 上下文窗口的起点。
 
-#### 5.1.4 心跳与重连
+#### 1.1.4 心跳与重连
 
 - 客户端每 30s 发送 `ping`，服务端回复 `pong`
 - 90s 内未收到任何消息视为断连，服务端主动关闭连接并清理所有频道订阅
 - 客户端重连采用指数退避：`1s → 2s → 4s → 8s → 16s → 32s (max)`
 - 重连后客户端需重新发送 `subscribe` 恢复频道订阅，并携带 `last_seq` 请求遗漏消息
 
-#### 5.1.5 消息持久化规则
+#### 1.1.5 消息持久化规则
 
 | 类别 | 持久化目标 | 说明 |
 |------|-----------|------|
@@ -561,7 +561,7 @@ func shouldPersist(msgType string) bool {
     → Redis 未命中（冷频道或超 500 条）→ 回退 MySQL 查询
 ```
 
-### 5.2 任务队列方案
+### 1.2 任务队列方案
 
 选用 **Asynq**（https://github.com/hibiken/asynq），基于 Redis 的分布式任务队列：
 
@@ -744,7 +744,7 @@ func (s *IssueService) TransitionToTodo(ctx context.Context, issueID uint) error
 
 > **防护效果**：同一 Issue 最多经历 3 次自动重试循环（`todo → in_progress → 失败 → todo`），第 4 次自动回退 `backlog` 并通知人工介入。仅人工确认后重置 `retry_count`。
 
-### 5.3 整体分布式拓扑
+### 1.3 整体分布式拓扑
 
 ```
                     ┌──────────────┐
@@ -780,7 +780,7 @@ func (s *IssueService) TransitionToTodo(ctx context.Context, issueID uint) error
 
 ---
 
-## 九、核心数据模型
+## 二、核心数据模型
 
 ### 9.0 角色与权限管理（RBAC）
 
@@ -862,7 +862,7 @@ m = g(r.sub, p.sub) && keyMatch(r.obj, p.obj) && regexMatch(r.act, p.act)
 
 #### 数据库设计
 
-Casbin 策略存储在 `casbin_rules` 表中，完整 DDL + 预置策略见 [ddl.sql](ddl.sql#认证与权限)。
+Casbin 策略存储在 `casbin_rules` 表中，完整 DDL + 预置策略见 [ddl.sql](../ddl.sql#认证与权限)。
 
 #### Go 中间件集成
 
@@ -1141,7 +1141,7 @@ func (c *ConsistencyChecker) checkMembersRoles(ctx context.Context) {
 
 > **冲突仲裁**：以 Casbin 策略为准。`members.role` 只是冗余缓存，仅用于前端快速展示角色（避免每次都查 Casbin），不参与权限判断。
 
-### 9.1 ER 关系图
+### 2.1 ER 关系图
 
 ```mermaid
 erDiagram
@@ -1184,9 +1184,9 @@ erDiagram
     Todo ||--o{ Issue : "关联同步"
 ```
 
-### 9.2 关键表映射
+### 2.2 关键表映射
 
-> 完整建表语句 + 种子数据见 **[ddl.sql](ddl.sql)**。以下为表结构速查。
+> 完整建表语句 + 种子数据见 **[ddl.sql](../ddl.sql)**。以下为表结构速查。
 
 | 表名 | 说明 | 关键字段 |
 |------|------|---------|
@@ -1219,7 +1219,7 @@ erDiagram
 
 > **Issue 与 Todo 的关系**：Issue（执行层，粗粒度，backlog→done）可拆解为 N 个 Todo（规划层，细粒度，todo→done）。L1-L4 先闭环 Issue 流程；Todo 模块为 [Phase 2](11-backlog.md) 能力。
 
-### 9.3 邀请机制说明
+### 2.3 邀请机制说明
 
 **两种邀请方式**：
 
@@ -1260,7 +1260,7 @@ erDiagram
 | 角色预分配 | 受邀进入组织时自动分配角色 |
 | 邮箱验证 | 邮箱邀请时验证邮箱归属 |
 
-### 9.4 邮件服务
+### 2.4 邮件服务
 
 邮件发送采用 `gopkg.in/gomail.v2`，通过 SMTP 发送邀请邮件和系统通知。
 
@@ -1355,7 +1355,7 @@ func (s *Sender) SendAgentNotification(
 
 > **locale 来源**：`users.locale` 字段（注册时根据浏览器语言设置，可在个人设置中修改）。未登录用户（邮箱邀请）默认按邀请人 locale 发送。
 
-### 9.5 API 路由总览
+### 2.5 API 路由总览
 
 所有 API 挂载在 `/api` 下，需要认证的端点由 JWT 中间件保护（标注 `🔒`），敏感操作额外受 Casbin RBAC 约束（标注 `🔐`）。
 
@@ -1491,7 +1491,7 @@ func (s *Sender) SendAgentNotification(
 
 > **图例**：无标注 = 公开端点 | `🔒` = 需 JWT 认证 | `🔐` = 需 JWT + Casbin RBAC | `[远期]` = [Phase 2](11-backlog.md) 实施
 
-### 9.5.1 双人聊 API 详细说明
+### 2.5.1 双人聊 API 详细说明
 
 **POST /api/orgs/:org_id/direct-messages** — 发起双人聊（幂等）
 
@@ -1584,7 +1584,7 @@ direct 类型的 `name` 为 `null`（双人聊不需要群名）。显示名通�
 
 更新 `group_read_state` 表，用于计算未读消息数。
 
-### 9.5.2 Dashboard 聚合 API
+### 2.5.2 Dashboard 聚合 API
 
 `GET /api/orgs/:org_id/dashboard` 返回仪表盘所需的聚合数据：
 
@@ -1681,7 +1681,7 @@ func (r *DashboardRepo) GetAgentActivity(ctx context.Context, orgID uint) (*Agen
 }
 ```
 
-### 9.6 通知生成与分发
+### 2.6 通知生成与分发
 
 服务端内部通过 `NotificationService` 自动生成通知，非由客户端 API 创建：
 
@@ -1931,9 +1931,9 @@ func (s *NotificationService) NotifyInvite(
 
 ---
 
-## 十、核心业务流程
+## 三、核心业务流程
 
-### 10.1 需求讨论 → /backlog 自动生成 Issue
+### 3.1 需求讨论 → /backlog 自动生成 Issue
 
 ```mermaid
 sequenceDiagram
@@ -2029,7 +2029,7 @@ sequenceDiagram
 | 批量转 todo | Shift/Ctrl 多选 backlog Issue（来自多次 /backlog 调用）→ 一键全部转为 todo 列入执行队列 |
 | @关联 Issue | 描述中通过 `@Issue #N` 引用其他 Issue，anserAgent 自动读取被引用 Issue 的内容注入到 opencode 执行提示词 |
 
-### 10.1.1 @Agent 任务布置（Agent 间协作）
+### 3.1.1 @Agent 任务布置（Agent 间协作）
 
 群内 Agent 可根据其他 Agent 的角色定义（`system_prompt` + 绑定 Skills），通过 `@AgentName` 语法向指定 Agent 布置任务。这是 Agent 间自主协作的核心机制：
 
@@ -2063,7 +2063,7 @@ sequenceDiagram
 | 权限校验 | Casbin 校验发起 Agent 是否有权 @ 目标 Agent（同群成员即可） |
 | 防循环 | 同一轮讨论中同一 Agent 最多被 @ 3 次，防止无限调度 |
 
-### 10.1.2 `/new` 会话上下文切换
+### 3.1.2 `/new` 会话上下文切换
 
 自然人发送 `/new` 开启新会话上下文。群聊消息历史仍在，但 Agent 的上下文窗口重置：
 

@@ -308,7 +308,7 @@ parser := runtimeMgr.GetParser(runtime.Name)
 
 ## 附录：沙箱镜像与执行细节
 
-> 以下内容从 [04-sandbox.md](04-sandbox.md) §七中提取，为沙箱执行的实现级细节。
+> 以下内容从 [04-sandbox.md](04-sandbox.md) §二、Docker 沙箱方案中提取，为沙箱执行的实现级细节。
 
 ### Dockerfile
 
