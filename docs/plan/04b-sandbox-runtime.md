@@ -1,312 +1,177 @@
 # AnserFlow - 沙箱执行运行时
 
-> **职责边界**：本文档覆盖 Docker 沙箱生命周期管理和运行时适配器模式。Agent 基础设施层（Eino 框架、状态机、通知、Git、Token）见 [04-sandbox.md](04-sandbox.md)。
+> **职责边界**：本文档覆盖 Docker 沙箱运行时适配器模式。Agent 基础设施层（Eino 框架、状态机、通知、Git、Token）见 [04-sandbox.md](04-sandbox.md)。
+>
+> **架构说明**：保留 RuntimeAdapter 和 OutputParser 接口抽象，方便未来扩展新的运行时。当前仅实现 anserAgent 一个运行时。
 
 ---
 
-### SandboxManager — 沙箱生命周期管理器
+## 一、运行时适配器架构
 
-沙箱创建、暂停、恢复、销毁、复用的逻辑分散在 Worker 和 executor.go 中，通过 `SandboxManager` 统一 Docker API 调用。
+### 设计原则
 
-**设计原则**：
-
-- Worker 只调 `SandboxManager.Create/Resume/Destroy`，不直接操作 Docker SDK
-
-- 资源限额、网络隔离、超时清理等策略集中管理
-
-- 便于替换沙箱方案（如 Firecracker）
-
-**核心接口**：
-
-```go
-
-type SandboxConfig struct {
-
-    IssueID        uint
-
-    Image          string
-
-    AllowedDomains []string
-
-    MaxMemoryMB    int
-
-    TimeoutMinutes int
-
-    EnvVars        map[string]string
-
-    ExistingID     string // 复用已有容器
-
-}
-
-type SandboxManager struct {
-
-    cli    *client.Client
-
-    config Config
-
-}
-
-func (m *SandboxManager) Create(ctx context.Context, cfg SandboxConfig) (*SandboxHandle, error)
-
-func (m *SandboxManager) Pause(ctx context.Context, containerID string) error
-
-func (m *SandboxManager) Resume(ctx context.Context, containerID string) error
-
-func (m *SandboxManager) Destroy(ctx context.Context, containerID string) error
-
-func (m *SandboxManager) IsAlive(ctx context.Context, containerID string) bool
-
-```
-
-> 实现细节：容器名 `anserflow-issue-{id}`，`AutoRemove=false`（保障 Worker 重启后可恢复），`Memory` 和网络白名单来自 `SandboxConfig`。
-
-### RuntimeManager — 运行时管理器（适配器模式）
-
-运行时配置构建（解密 API Key、拼接 execute_template、写 config.json）当前直接写在 Worker 中，通过 `RuntimeAdapter` 接口抽象运行时差异，使切换 AI 工具只需实现接口 + 在 `runtimes` 表插入一行。
-
-**设计原则**：
+保留适配器模式以便未来扩展新的运行时（如 Claude Code、Codex CLI 等）。当前仅实现 anserAgent 一个运行时。
 
 - `RuntimeAdapter` 接口定义配置注入、环境变量映射等运行时差异点
-
 - `OutputParser` 接口定义 stdout 解析、Token 采集等输出差异点
-
-- 新运行时注册只需：实现接口 + 插入 `runtimes` 表
-
+- 新运行时只需实现接口并替换 RuntimeManager 初始化即可
 - Worker 不感知具体运行时，只调用接口
 
-**接口定义**：
+### 接口定义
 
 ```go
-
 // internal/runtime/adapter.go
 
 package runtime
 
 // RuntimeAdapter 运行时适配器 — 封装不同 AI 工具的配置注入差异
-
-// 新运行时只需实现此接口，注册到 Registry 即可
-
 type RuntimeAdapter interface {
-
-    // Name 运行时标识（对应 runtimes.name）
-
+    // Name 运行时标识
     Name() string
-
+    
     // HomeDir 运行时在容器内的主目录（bind mount 目标）
-
-    // 项目级 runtime 目录会整体 bind mount 到此路径（读写）
-
-    // opencode → /home/sandbox/.opencode
-
-    // hermes → /home/sandbox/.hermes
-
     HomeDir() string
-
-    // ConfigPath 配置文件写入路径（容器内，HomeDir 的子路径）
-
-    // opencode → /home/sandbox/.opencode/config.json
-
-    // hermes → /home/sandbox/.hermes/config.yaml
-
+    
+    // ConfigPath 配置文件写入路径（容器内）
     ConfigPath() string
-
-    // RenderConfig 将通用配置渲染为该工具特有的配置 JSON
-
-    // 不同工具的配置结构差异封装在此方法内
-
+    
+    // RenderConfig 将通用配置渲染为该工具特有的配置格式
     RenderConfig(config map[string]interface{}) (string, error)
-
+    
     // EnvMapping API Key → 环境变量映射
-
-    // opencode + openai → OPENAI_API_KEY
-
-    // hermes + openrouter → OPENROUTER_API_KEY
-
     EnvMapping(config map[string]interface{}, decryptedKey string) map[string]string
-
-    // SkillsMountPath Skills 目录在容器内的路径（HomeDir 子路径）
-
-    // opencode → /home/sandbox/.opencode/skills
-
-    // hermes → /home/sandbox/.hermes/skills
-
+    
+    // SkillsMountPath Skills 目录在容器内的路径
     SkillsMountPath() string
-
+    
     // SessionPath 会话文件路径（用于事后 Token 汇总），空字符串表示不支持
-
-    // opencode → /home/sandbox/.local/share/opencode/sessions/*.jsonl
-
-    // hermes → /home/sandbox/.hermes/sessions/*.jsonl
-
     SessionPath() string
-
+    
+    // ExecuteCommand 生成执行命令
+    ExecuteCommand(workdir, configPath, prompt string) string
 }
 
 // OutputParser 输出解析器 — 封装不同 AI 工具的 stdout 格式差异
-
 type OutputParser interface {
-
     // ParseLine 解析单行 stdout 输出
-
-    // 返回 nil 表示该行不是结构化事件（忽略或按纯文本处理）
-
+    // 返回 nil 表示该行不是结构化事件（按纯文本处理）
     ParseLine(line []byte) *ParsedEvent
-
+    
     // ParseSessionFile 解析会话文件（执行完成后调用）
-
-    // 返回 nil 表示该运行时不支持 session 文件
-
     ParseSessionFile(content []byte) (*TokenSummary, error)
-
 }
-
-// ParsedEvent 解析后的单行事件
-
-type ParsedEvent struct {
-
-    Type       string            // "agent_log" / "token_usage" / "error"
-
-    Content    string            // 文本内容（写入 issue_timeline）
-
-    TokenUsage *TokenUsageDetail // Token 用量（非空时写入 token_tracker）
-
-}
-
-// TokenUsageDetail Token 用量明细
-
-type TokenUsageDetail struct {
-
-    InputTokens      int64
-
-    OutputTokens     int64
-
-    CacheReadTokens  int64
-
-    CacheWriteTokens int64
-
-}
-
-// TokenSummary 会话文件 Token 汇总
-
-type TokenSummary struct {
-
-    TotalInput  int64
-
-    TotalOutput int64
-
-}
-
 ```
 
-**Registry — 运行时注册表**：
+### 当前实现：anserAgent
 
 ```go
+// internal/runtime/anseragent.go
 
-// internal/runtime/registry.go
+// AnserAgentAdapter anserAgent 运行时适配器实现
+type AnserAgentAdapter struct{}
 
-package runtime
-
-// Registry 全局运行时注册表，初始化时注册内置运行时
-
-type Registry struct {
-
-    adapters map[string]RuntimeAdapter
-
-    parsers  map[string]OutputParser
-
+func (a *AnserAgentAdapter) Name() string {
+    return "anseragent"
 }
 
-func NewRegistry() *Registry {
-
-    r := &Registry{
-
-        adapters: make(map[string]RuntimeAdapter),
-
-        parsers:  make(map[string]OutputParser),
-
-    }
-
-    // 注册内置运行时
-
-    r.Register(&OpenCodeAdapter{}, &OpenCodeParser{})
-
-    r.Register(&HermesAdapter{}, &HermesParser{})
-
-    return r
-
+func (a *AnserAgentAdapter) HomeDir() string {
+    return "/home/sandbox/.anseragent"
 }
 
-func (r *Registry) Register(a RuntimeAdapter, p OutputParser) {
-
-    r.adapters[a.Name()] = a
-
-    r.parsers[a.Name()] = p
-
+func (a *AnserAgentAdapter) ConfigPath() string {
+    return "/home/sandbox/.anseragent/config.yaml"
 }
 
-func (r *Registry) GetAdapter(name string) RuntimeAdapter { return r.adapters[name] }
+func (a *AnserAgentAdapter) SkillsMountPath() string {
+    return "/home/sandbox/.anseragent/skills"
+}
 
-func (r *Registry) GetParser(name string) OutputParser    { return r.parsers[name] }
+func (a *AnserAgentAdapter) SessionPath() string {
+    return "/home/sandbox/.anseragent/sessions/*.jsonl"
+}
 
+// ExecuteCommand 生成执行命令
+func (a *AnserAgentAdapter) ExecuteCommand(workdir, configPath, prompt string) string {
+    return fmt.Sprintf(
+        "/usr/local/bin/anserflow agent run --workdir %s --config %s --prompt %q --format json",
+        workdir, configPath, prompt,
+    )
+}
 ```
 
-**内置运行时路径映射**：
-
-| 属性 | opencode | hermes |
-
-|------|----------|--------|
-
-| HomeDir | `/home/sandbox/.opencode` | `/home/sandbox/.hermes` |
-
-| ConfigPath | `.opencode/config.json` | `.hermes/config.yaml` |
-
-| SkillsMountPath | `.opencode/skills` | `.hermes/skills` |
-
-| SessionPath | `.local/share/opencode/sessions/*.jsonl` | `.hermes/sessions/*.jsonl` |
-
-| EnvKey(openai) | `OPENAI_API_KEY` | `OPENAI_API_KEY` |
-
-| EnvKey(openrouter) | — | `OPENROUTER_API_KEY` |
-
-**RuntimeManager 核心方法**：
+### RuntimeManager — 简化管理器
 
 ```go
+// internal/runtime/manager.go
 
 type RuntimeManager struct {
-
-    registry *Registry
-
-    crypto   CryptoService
-
+    adapter RuntimeAdapter
+    parser  OutputParser
 }
 
-// ResolveConfig 通过适配器解析运行时配置：
+// NewRuntimeManager 创建运行时管理器（直接初始化 anserAgent）
+func NewRuntimeManager() *RuntimeManager {
+    return &RuntimeManager{
+        adapter: &AnserAgentAdapter{},
+        parser:  &AnserAgentParser{},
+    }
+}
 
-//   1. 解密 API Key → 2. adapter.RenderConfig → 3. 渲染 execute_template → 4. adapter.EnvMapping
-
-func (m *RuntimeManager) ResolveConfig(ctx context.Context, runtimeName string, ...) (*ResolvedSandboxConfig, error)
-
-// GetParser 获取输出解析器
-
-func (m *RuntimeManager) GetParser(runtimeName string) OutputParser
-
+// ResolveConfig 解析运行时配置
+func (m *RuntimeManager) ResolveConfig(
+    config map[string]interface{},
+    decryptedKey string,
+) (renderedConfig string, envVars map[string]string, err error) {
+    renderedConfig, err = m.adapter.RenderConfig(config)
+    if err != nil {
+        return "", nil, err
+    }
+    
+    envVars = m.adapter.EnvMapping(config, decryptedKey)
+    return renderedConfig, envVars, nil
+}
 ```
 
-**Worker 调用（运行时无关）**：
+### Worker 调用示例（运行时无关）
 
 ```go
+// internal/worker/executor.go
 
-resolved, _ := runtimeMgr.ResolveConfig(ctx, runtime.Name, runtime.ExecuteTemplate, agent.RuntimeConfig, issue.Prompt)
+// 初始化
+runtimeMgr := runtime.NewRuntimeManager()
+adapter := runtimeMgr.GetAdapter()
+parser := runtimeMgr.GetParser()
 
-parser := runtimeMgr.GetParser(runtime.Name)
+// 解析配置
+renderedConfig, envVars, _ := runtimeMgr.ResolveConfig(
+    agentConfig,
+    decryptedAPIKey,
+)
 
-// stdout 解析通过 parser.ParseLine，事件统一处理
+// 写入配置文件到容器
+configPath := adapter.ConfigPath()
+writeToContainer(containerID, configPath, renderedConfig)
 
+// 构建执行命令
+cmd := adapter.ExecuteCommand(
+    issue.Workdir(),
+    configPath,
+    issue.TaskPrompt(),
+)
+
+// 设置环境变量
+cmd.Env = buildEnv(envVars)
+
+// 执行并解析 stdout
+stdout, _ := cmd.StdoutPipe()
+go parseAgentOutput(stdout, parser, issue.ID)
+
+cmd.Run()
 ```
 
 ---
 
-## 附录：沙箱镜像与执行细节
+## 二、沙箱镜像与执行细节
 
 > 以下内容从 [04-sandbox.md](04-sandbox.md) §二、Docker 沙箱方案中提取，为沙箱执行的实现级细节。
 
@@ -319,43 +184,67 @@ docker build -t anserflow/sandbox:latest -f docker/sandbox/Dockerfile .
 ```
 
 ```dockerfile
+FROM alpine:3.21 AS builder
+
+# 编译阶段（如果需要）
+FROM golang:1.24-alpine AS compiler
+WORKDIR /build
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -o anserflow ./cmd/anserflow
+
+# 最终镜像
 FROM alpine:3.21
 
-RUN apk add --no-cache \
-    nodejs npm \
-    python3 py3-pip \
-    git curl bash \
-    && rm -rf /var/cache/apk/*
+RUN apk add --no-cache git bash ca-certificates
 
 RUN adduser -D -u 1000 sandbox
 
-RUN npm install -g opencode-ai@latest \
-    && npm cache clean --force
+# 直接复制编译好的二进制
+COPY --from=compiler /build/anserflow /usr/local/bin/anserflow
+RUN chmod +x /usr/local/bin/anserflow
 
-RUN mkdir -p /workspace && chown sandbox:sandbox /workspace
+RUN mkdir -p /workspace /home/sandbox/.anseragent
+RUN chown sandbox:sandbox /workspace /home/sandbox/.anseragent
 
 WORKDIR /workspace
+USER sandbox
 
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-USER sandbox
 ENTRYPOINT ["/entrypoint.sh"]
 ```
 
-> 预估镜像大小约 400MB。`.dockerignore` 排除 node_modules/ / .git/ / dist/ / .next/ / *.log。
+> 预估镜像大小约 50MB（移除 Node.js/npm/Python 后）。`.dockerignore` 排除 node_modules/ / .git/ / dist/ / .next/ / *.log。
 
 ### entrypoint.sh
 
 ```bash
-# 由 Worker 传入环境变量和配置注入文件控制行为：
-#   GIT_REPO_URL / GIT_BRANCH / GITHUB_TOKEN → git clone
-#   TASK_PROMPT                              → opencode run 的 prompt 参数
-#
-# opencode 配置由 Worker 在容器启动后通过以下方式注入（每次覆盖）：
-#   ① 写入 ~/.config/opencode/config.json   → opencode 读取 provider / model 配置
-#   ② 注入环境变量                           → API Key 不落盘
-#   ③ opencode run --model provider/model    → 运行时指定模型
+#!/bin/bash
+set -e
+
+# Git 仓库初始化
+if [ -n "$GIT_REPO_URL" ]; then
+    echo "📦 Cloning repository..."
+    git clone --branch "${GIT_BRANCH:-main}" "$GIT_REPO_URL" /workspace/main
+fi
+
+# 执行编码任务
+if [ -n "$TASK_PROMPT" ]; then
+    echo "🤖 Starting anserAgent..."
+    
+    /usr/local/bin/anserflow agent run \
+        --workdir "${WORKDIR:-/workspace/main}" \
+        --config /home/sandbox/.anseragent/config.yaml \
+        --prompt "$TASK_PROMPT" \
+        --format json
+    
+    echo "✅ anserAgent completed"
+    exit $?
+fi
+
+# 保持容器运行
+exec tail -f /dev/null
 ```
 
 > API Key AES-256 加密存储，Worker 解密后通过环境变量注入容器。
@@ -371,7 +260,7 @@ func ensureProjectContainer(ctx, project, runtime) (string, error)
 
 func createWorktree(ctx, containerID, issue) error
 func removeWorktree(ctx, containerID, issueID) error
-func execOpenCode(ctx, containerID, issue, task) error
+func execAgent(ctx, containerID, issue, task) error
 func destroyProjectSandbox(ctx, projectID, containerID) error
 ```
 
@@ -380,21 +269,18 @@ func destroyProjectSandbox(ctx, projectID, containerID) error
 ```
 /var/lib/anserflow/               ← runtime_data_dir
 ├── runtimes/                     ← Layer 1: 全局模板
-│   └── opencode/
+│   └── anseragent/
 │       ├── skills/
-│       ├── config.json
-│       └── plugins/
+│       └── config.yaml
 ├── projects/                     ← Layer 2: 项目实例
 │   └── 42/
 │       └── runtime/
 │           ├── skills/
-│           ├── config.json
-│           └── plugins/
+│           └── config.yaml
 沙箱容器                         ← Layer 3: bind mount
-└── /home/sandbox/.opencode/
+└── /home/sandbox/.anseragent/
     ├── skills/   ← bind mount 自 projects/42/runtime/
-    ├── config.json
-    └── plugins/
+    └── config.yaml
 ```
 
 ```go
@@ -402,19 +288,45 @@ func destroyProjectSandbox(ctx, projectID, containerID) error
 func initProjectRuntime(ctx, projectID, runtimeName) (string, error)
 ```
 
-### GitHub SDK 集成
+---
 
-| SDK | 用途 | 运行位置 |
-|------|------|----------|
-| **go-git** | `clone`/`commit`/`push`/`checkout` | Docker 沙箱内 |
-| **go-github/v68** | 创建 PR/Issue/Review/读取仓库 | Go 后端 Service 层 |
+## 三、扩展新运行时指南
+
+当需要支持新的 AI 编码工具时（如 Claude Code）：
+
+### 步骤 1: 实现接口
 
 ```go
-client := github.NewClient(nil).WithAuthToken(token)
-client.Issues.Create(ctx, owner, repo, &github.IssueRequest{...})
-client.PullRequests.Create(ctx, owner, repo, &github.NewPullRequest{...})
+// internal/runtime/claude_code.go
+
+type ClaudeCodeAdapter struct{}
+
+func (c *ClaudeCodeAdapter) Name() string { return "claude_code" }
+func (c *ClaudeCodeAdapter) HomeDir() string { return "/home/sandbox/.claude" }
+// ... 实现其他接口方法
+
+type ClaudeCodeParser struct{}
+// ... 实现 OutputParser 接口
 ```
 
-**Token 权限**：`repo` + `issues:write` + `pull_requests:write`。
+### 步骤 2: 替换初始化
 
-**多平台扩展**（[Phase 2](11-backlog.md)）：通过 `GitPlatform` + `GitOps` 双接口抽象，支持 Gitea / GitLab / Gitee。
+```go
+// internal/runtime/manager.go
+
+func NewRuntimeManager() *RuntimeManager {
+    return &RuntimeManager{
+        adapter: &ClaudeCodeAdapter{},  // 替换为新实现
+        parser:  &ClaudeCodeParser{},
+    }
+}
+```
+
+### 步骤 3: 更新 Dockerfile
+
+```dockerfile
+# 添加新运行时的安装步骤
+RUN curl -fsSL https://claude.ai/install.sh | sh
+```
+
+Worker 代码无需修改，完全通过接口隔离。

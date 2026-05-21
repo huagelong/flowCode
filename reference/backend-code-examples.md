@@ -247,7 +247,7 @@ func (h *IssueExecutionHandler) ProcessTask(ctx context.Context, task *asynq.Tas
     
     // 1. 更新 Issue 状态为 in_progress
     // 2. 分配沙箱容器
-    // 3. 启动 opencode 执行
+    // 3. 启动 anserAgent 执行
     // 4. 等待完成并更新状态
     
     return h.executionService.Run(ctx, payload.IssueID)

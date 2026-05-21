@@ -189,6 +189,7 @@ internal/agent/
 - 数据库：MySQL 8.0
 - 缓存/队列：Redis 7.0（AOF 持久化）
 - AI 框架：Eino（字节 CloudWeGo）
+- 沙箱运行时：anserAgent（自研）
 
 ## 前端
 - Next.js 14（SPA 静态导出）
@@ -693,14 +694,14 @@ func (s *SandboxOrchestrator) ExecuteIssue(ctx context.Context, issue *Issue) er
 │       │                                                │
 │       ├── MemoryManager ──► L2 事实 + L3 Skills       │
 │       ├── SkillManager  ──► anser-coder 等            │
-│       └── RuntimeAdapter ──► opencode / hermes 沙箱   │
+│       └── RuntimeAdapter ──► anserAgent 沙箱   │
 └───────────────────────────────────────────────────────┘
 ```
 
 | 模块 | anserAgent 关系 |
 |------|----------------|
 | **Eino** | 底层引擎，提供 ChatModel / Graph / Tool / Callbacks |
-| **RuntimeAdapter** | 执行模式的行动层（opencode/hermes） |
+| **RuntimeAdapter** | 执行模式的行动层（anserAgent） |
 | **MemoryManager** | 五层记忆读写，Markdown Wiki 文件存储 |
 | **SkillManager** | Skills 加载、自动生成、自改进 |
 | **GitManager** | 执行模式中调用 GitOps |

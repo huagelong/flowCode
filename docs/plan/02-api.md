@@ -352,10 +352,10 @@ Issue 状态变为 in_progress (assignee = agent)
 ┌──────────────────┐
 │ Asynq Worker      │  →  HandleFunc("agent:execute", handler)
 │ (独立进程/协程)   │     1. 创建 Docker 沙箱
-└──────────────────┘     2. 注入 opencode 配置 + Agent 人设
+└──────────────────┘     2. 注入 anserAgent 配置 + Agent 人设
         │                3. 注入人工提示词（来自 issue_timeline）
-        ▼                4. opencode run 执行编码
-┌──────────────────┐     5. opencode 检查结果
+        ▼                4. anserAgent run 执行编码
+┌──────────────────┐     5. anserAgent 检查结果
 │ Docker Sandbox    │     6. 通过 → commit + push + PR → in_review
 └──────────────────┘     7. 失败 → 写入时间线 → 人工介入重试
 ```
@@ -399,9 +399,9 @@ Asynq 核心特性：
 | Worker 消费 | `in_progress` | Active（已 dequeue） | 不在 Redis 队列中 |
 | 人工暂停 | `in_progress → paused` | Active（Worker 心跳等待） | Docker 容器冻结 |
 | 人工恢复 | `paused → in_progress` | Active（Worker 心跳跳出） | Docker 容器解冻 |
-| 人工停止 | `in_progress/paused → backlog` | 终止（goroutine 退出） | worktree 保留，opencode 进程终止 |
-| opencode 成功 | `in_progress → in_review` | Completed | 任务返回 nil |
-| opencode 失败 | `in_progress → todo` | Failed → 重新入队（retry_count+1） | 保留沙箱 |
+| 人工停止 | `in_progress/paused → backlog` | 终止（goroutine 退出） | worktree 保留，anserAgent 进程终止 |
+| anserAgent 成功 | `in_progress → in_review` | Completed | 任务返回 nil |
+| anserAgent 失败 | `in_progress → todo` | Failed → 重新入队（retry_count+1） | 保留沙箱 |
 | 重试耗尽 | `todo → backlog` | Archived（死信队列） | 销毁沙箱 |
 
 #### 调度器无限重试防护
@@ -1693,7 +1693,7 @@ sequenceDiagram
 | 修改负责人 | 重新分配 Agent 或自然人 |
 | 删除 Issue | 仅 backlog 状态可删除 |
 | 批量转 todo | Shift/Ctrl 多选 backlog Issue（来自多次 /backlog 调用）→ 一键全部转为 todo 列入执行队列 |
-| @关联 Issue | 描述中通过 `@Issue #N` 引用其他 Issue，anserAgent 自动读取被引用 Issue 的内容注入到 opencode 执行提示词 |
+| @关联 Issue | 描述中通过 `@Issue #N` 引用其他 Issue，anserAgent 自动读取被引用 Issue 的内容注入到 anserAgent 执行提示词 |
 
 ### 3.1.1 @Agent 任务布置（Agent 间协作）
 
@@ -1795,7 +1795,7 @@ sequenceDiagram
     W->>W: 加载 Agent 配置 + Skills + 人工提示词
     W->>W: 解析描述中的 @Issue #N → 读取关联 Issue 内容
     W->>D: 创建沙箱容器
-    W->>D: git clone → 注入配置 + 关联Issue上下文 → opencode run
+    W->>D: git clone → 注入配置 + 关联Issue上下文 → anserAgent run
     W->>D: 监控日志输出 → 实时推送 Issue 时间线
     W->>WS: 推送 "编码中..." / "运行测试..."
 
@@ -1819,7 +1819,7 @@ sequenceDiagram
         ISS->>G: 系统消息: "Issue #1 执行已停止"
     end
 
-    Note over W,GH: ④ opencode 自检查 → PR
+    Note over W,GH: ④ anserAgent 自检查 → PR
     W->>D: opencode 返回执行结果
     W->>W: 检查结果（代码完整性/lint/test 通过）
     alt opencode 检查通过

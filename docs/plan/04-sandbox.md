@@ -128,7 +128,7 @@
 
 │  anserAgent 不负责：代码生成 / 编码执行        │
 
-│              └→ 由运行时（opencode/hermes）在 Docker 沙箱完成│
+│              └→ 由运行时（anserflow agent）在 Docker 沙箱完成│
 
 │                                           │
 
@@ -174,7 +174,7 @@ Eino 使用 `config.yaml` 中 `llm` 配置段统一管理多 Agent 的模型连�
 
 `agents.runtime_config` JSON 由绑定的运行时决定其 schema。`runtimes.config_schema` 定义了该运行时可配置的所有字段，前端根据 schema 动态生成表单：
 
-**opencode 运行时配置示例**（`runtimes.config_schema` 驱动）：
+**anserAgent 运行时配置示例**（`runtimes.config_schema` 驱动）：
 
 ```json
 
@@ -202,7 +202,7 @@ Eino 使用 `config.yaml` 中 `llm` 配置段统一管理多 Agent 的模型连�
 
 Admin UI (Agent 编辑页)
 
-│  ① 下拉选择运行时（opencode / hermes / ...）
+│  ① 下拉选择运行时（anserAgent）
 
 │  ② 前端根据 runtimes.config_schema 动态渲染配置表单
 
@@ -214,11 +214,11 @@ Admin UI (Agent 编辑页)
 
 Worker (沙箱启动时)
 
-│  ① 读取 agents.runtime_id → 确定运行时（opencode / hermes）
+│  ① 读取 agents.runtime_id → 确定运行时（anserAgent）
 
 │  ② 读取 agents.runtime_config → 填充模板变量
 
-│  ③ 通过 RuntimeClient 接口与沙箱内 opencode/hermes 建立双向流连接：
+│  ③ 通过 RuntimeClient 接口与沙箱内 anserAgent 建立双向流连接：
 
 │     - SandboxClient: 启动 Docker 容器，通过 ContainerAttach 双向通讯
 
@@ -252,7 +252,7 @@ Worker 通过 RuntimeClient 向沙箱注入 Skills 配置时，合并 Runtime �
 
 |-------|------|---------|------|
 
-| `anser-coder` | Runtime 默认（opencode） | ❌ 不可关闭 | `is_builtin=1`，前端灰掉开关 |
+| `anser-coder` | Runtime 默认（anserAgent） | ❌ 不可关闭 | `is_builtin=1`，前端灰掉开关 |
 
 | 用户创建的 Skill | Runtime 默认 / Agent 绑定 | ✅ 可开关 | 后台自由管理 |
 
@@ -924,7 +924,7 @@ type Usage struct {
 
     CompletionTokens int64
 
-    Source           string // "agent" | "opencode"
+    Source           string // "agent" | "anseragent"
 
 }
 
@@ -1088,9 +1088,9 @@ func (d *Dispatcher) Execute(ctx context.Context, llmOutput string, agent *model
 
 ```
 
-**anserAgent Tool 与 opencode Tool 对比**：
+**anserAgent Tool 与沙箱内 Tool 对比**：
 
-| | anserAgent Tool | opencode Tool |
+| | anserAgent Tool | 沙箱内 Tool |
 
 |------|---------|------------|
 
@@ -1100,7 +1100,7 @@ func (d *Dispatcher) Execute(ctx context.Context, llmOutput string, agent *model
 
 | 权限 | Casbin RBAC | 沙箱隔离 |
 
-| 注册方式 | `registry.Register(name, handler)` | opencode 内置 |
+| 注册方式 | `registry.Register(name, handler)` | anserAgent 内置 |
 
 | 典型调用 | `create_issue` / `send_message` | `read` / `write` / `bash` |
 
@@ -1216,7 +1216,7 @@ func (o *GroupOrchestrator) InvokeWithMentions(ctx, agent, messages, mentions) {
 
 ```
 
-Eino 在将人工提示词注入 opencode 之前，自动进行上下文增强与工程化改写：
+Eino 在将人工提示词注入 anserAgent 之前，自动进行上下文增强与工程化改写：
 
 ```go
 
@@ -1232,7 +1232,7 @@ func (o *PromptOptimizer) Enhance(ctx context.Context, rawPrompt string, issue *
 
 ```
 
-> **关键**：Eino 只做调度与提示词优化，不进入 Docker 沙箱。沙箱内的代码生成完全由 opencode 完成。
+> **关键**：Eino 只做调度与提示词优化，不进入 Docker 沙箱。沙箱内的代码生成完全由 anserAgent 完成。
 
 ### Token 用量与成本追踪
 
@@ -1244,7 +1244,7 @@ func (o *PromptOptimizer) Enhance(ctx context.Context, rawPrompt string, issue *
 
 | **anserAgent 调度** | Go 后端进程 | `TokenTracker.Record(agentID, usage, "agent")` | ~10-20% |
 
-| **opencode 执行** | Docker 沙箱内 | 解析 stdout JSON + session 文件 | ~80-90% |
+| **anserAgent 执行** | Docker 沙箱内 | 解析 stdout JSON + session 文件 | ~80-90% |
 
 #### TokenTracker — 统一记录（区分来源）
 
@@ -1258,7 +1258,7 @@ type TokenTracker struct { redis *redis.Client }
 
 //   source="agent"  → agent_prompt_tokens / agent_completion_tokens
 
-//   source="opencode" → opencode_prompt_tokens / opencode_completion_tokens
+//   source="anseragent" → anseragent_prompt_tokens / anseragent_completion_tokens
 
 // GetDailyUsage(agentID, date) → prompt, completion 汇总
 
@@ -1272,15 +1272,15 @@ type TokenTracker struct { redis *redis.Client }
 
 ```
 
-#### opencode 执行阶段 — 双通道采集
+#### anserAgent 执行阶段 — 双通道采集
 
-**通道 ① 实时：`opencode run --format json` stdout 解析**
+**通道 ① 实时：`anserflow agent run --format json` stdout 解析**
 
 ```go
 
-// internal/worker/executor.go — opencode run --format json → stdout JSON Lines 解析
+// internal/worker/executor.go — anserflow agent run --format json → stdout JSON Lines 解析
 
-//   解析 "token_usage" 字段 → tokenTracker.Record(agentID, ..., "opencode")
+//   解析 "token_usage" 字段 → tokenTracker.Record(agentID, ..., "anseragent")
 
 //   解析 "content" 字段 → timelineRepo.Append(issueID, ...)
 
@@ -1288,13 +1288,13 @@ type TokenTracker struct { redis *redis.Client }
 
 ```
 
-**通道 ② 事后汇总：opencode session 文件解析**
+**通道 ② 事后汇总：anserAgent session 文件解析**
 
-opencode 在 `~/.local/share/opencode/sessions/` 下保存 JSONL 格式的会话文件，每条消息包含 `token_usage` 字段。Worker 在执行完成后从容器中提取：
+anserAgent 在 `/home/sandbox/.anseragent/sessions/` 下保存 JSONL 格式的会话文件，每条消息包含 `token_usage` 字段。Worker 在执行完成后从容器中提取：
 
 ```go
 
-// internal/worker/session_parser.go — 事后汇总：读取 opencode session JSONL → 累加 token_usage → RecordFinal
+// internal/worker/session_parser.go — 事后汇总：读取 anserAgent session JSONL → 累加 token_usage → RecordFinal
 
 //   去重：取 max(实时, 事后) 作为最终值，弥补实时 JSON 解析遗漏
 
@@ -1302,13 +1302,13 @@ func (w *Worker) collectSessionTokens(ctx, containerID, agentID, issueID) error
 
 ```
 
-> **双通道去重策略**：实时通道在 opencode 执行过程中持续累加 token，事后通道在执行完成后读取 session 文件获得最终精确值。取 `max(实时, 事后)` 作为最终值，覆盖 Redis 中的 opencode 部分（通过 `RecordFinal` 实现）。这样即使实时通道部分 JSON 解析失败，事后通道也能兜底。
+> **双通道去重策略**：实时通道在 anserAgent 执行过程中持续累加 token，事后通道在执行完成后读取 session 文件获得最终精确值。取 `max(实时, 事后)` 作为最终值，覆盖 Redis 中的 anserAgent 部分（通过 `RecordFinal` 实现）。这样即使实时通道部分 JSON 解析失败，事后通道也能兜底。
 
 #### Token 总量公式
 
 ```
 
-Agent 总 Token = anserAgent 调度 Token + opencode 执行 Token
+Agent 总 Token = anserAgent 调度 Token + anserAgent 执行 Token
 
               = (讨论 + /backlog + 提示词优化) + (编码 + 测试 + 修复 + PR)
 
@@ -1320,7 +1320,7 @@ Agent 总 Token = anserAgent 调度 Token + opencode 执行 Token
 
 | `agent` | 群聊 Agent 讨论、`/backlog` 方案拆解、`PromptOptimizer.Enhance()` | `anserAgent.Invoke` / `CommandHandler.HandleBacklog` |
 
-| `opencode` | `opencode run` 全过程（读取代码、生成代码、运行测试、修复错误、commit） | `Worker.executeWithTokenTracking` |
+| `anseragent` | `anserflow agent run` 全过程（读取代码、生成代码、运行测试、修复错误、commit） | `Worker.executeWithTokenTracking` |
 
 > **LLM API Key 安全模型**：API Key 在 `agents.runtime_config.llm.api_key_encrypted` 中以 AES-256 加密存储；Agent 执行时 Worker 解密后通过环境变量注入 Docker 沙箱，不写入容器文件系统。
 
@@ -1392,7 +1392,7 @@ Project "my-app" (project_id=1)
 
 ├── 容器 anserflow-project-1 (常驻，项目创建时初始化)
 
-│   ├── opencode / hermes / git / node / python / npm
+│   ├── anserflow (Go 二进制) / git / bash
 
 │   ├── AutoRemove: false
 
@@ -1420,9 +1420,9 @@ Project "my-app" (project_id=1)
 
 │
 
-├── Issue #42 (in_progress) ──► docker exec opencode run --workdir /workspace/issue-42
+├── Issue #42 (in_progress) ──► docker exec anserflow agent run --workdir /workspace/issue-42
 
-├── Issue #43 (in_progress) ──► docker exec opencode run --workdir /workspace/issue-43
+├── Issue #43 (in_progress) ──► docker exec anserflow agent run --workdir /workspace/issue-43
 
 └── Issue #44 (todo) ──────────► 等待分配
 
@@ -1436,9 +1436,9 @@ Project "my-app" (project_id=1)
 
 docker exec anserflow-project-1 git worktree add /workspace/issue-42 -b feat/issue-42 main
 
-# Isssue 执行过程中，opencode 在 worktree 内开发
+# Isssue 执行过程中，anserAgent 在 worktree 内开发
 
-docker exec anserflow-project-1 opencode run --workdir /workspace/issue-42 "实现登录页"
+docker exec anserflow-project-1 anserflow agent run --workdir /workspace/issue-42 --prompt "实现登录页"
 
 # Issue 完成后清理（先 push 分支，再 remove worktree）
 
@@ -1530,19 +1530,19 @@ docker exec anserflow-project-1 git branch -D feat/issue-42
 
 │  │                                                    │  │
 
-│  │  Step 5: 在 worktree 内执行 opencode               │  │
+│  │  Step 5: 在 worktree 内执行 anserAgent             │  │
 
 │  │  │  docker exec \                                  │  │
 
 │  │  │    --workdir /workspace/issue-{id} \            │  │
 
-│  │  │    opencode run "实现登录页"                     │  │
+│  │  │    anserflow agent run --prompt "实现登录页"     │  │
 
 │  │  │                                                  │  │
 
-│  │  │  ┌─ opencode exec ←→ Worker 消息环 ──────────┐  │  │
+│  │  │  ┌─ anserAgent exec ←→ Worker 消息环 ─────────┐  │  │
 
-│  │  │  │  opencode 通过 stdout JSON Lines 实时输出  │  │  │
+│  │  │  │  anserAgent 通过 stdout JSON Lines 实时输出  │  │  │
 
 │  │  │  │  Worker 解析 → DB + WebSocket → 前端       │  │  │
 
@@ -1556,7 +1556,7 @@ docker exec anserflow-project-1 git branch -D feat/issue-42
 
 │  │  Step 6: 收尾                                      │  │
 
-│  │  ├── opencode 检查通过:                            │  │
+│  │  ├── anserAgent 检查通过:                            │  │
 
 │  │  │   ├── git add → commit → push（在 worktree 内）│  │
 
@@ -1566,7 +1566,7 @@ docker exec anserflow-project-1 git branch -D feat/issue-42
 
 │  │  │   └── git worktree remove + branch -D（清理）   │  │
 
-│  │  ├── opencode 检查失败:                            │  │
+│  │  ├── anserAgent 检查失败:                            │  │
 
 │  │  │   ├── 写入失败原因到时间线                       │  │
 
@@ -1588,11 +1588,11 @@ docker exec anserflow-project-1 git branch -D feat/issue-42
 
 ### 2.1.1 沙箱 ↔ 系统消息互通闭环
 
-opencode 通过 **docker exec 的 stdout 流 + 退出码** 与 Worker 通信，Worker 负责解析、存储、推送：
+anserAgent 通过 **docker exec 的 stdout 流 + 退出码** 与 Worker 通信，Worker 负责解析、存储、推送：
 
 ```
 
-沙箱内 opencode（docker exec）    宿主机 Worker                   前端 Issue 时间线
+沙箱内 anserAgent（docker exec）    宿主机 Worker                   前端 Issue 时间线
 
 ══════════════════════════        ════════════                   ════════════════
 
@@ -1654,7 +1654,7 @@ exit 0                              │ 检查: 退出码=0                 │
 
 |---------|------|------|------|
 
-| opencode → Worker | docker exec stdout | 实时日志行（生成/测试/修复） | 每秒数次 |
+| anserAgent → Worker | docker exec stdout | 实时日志行（生成/测试/修复） | 每秒数次 |
 
 | Worker → MySQL | GORM Insert | `agent_logs`（结构存储）+ `issue_timeline`（展示存储） | 每条 stdout |
 
@@ -1662,7 +1662,7 @@ exit 0                              │ 检查: 退出码=0                 │
 
 | Worker → 前端 | WebSocket | JSON 事件 `{type:"agent_log", text, ts}` | 每条 stdout |
 
-| opencode → Worker | Exit Code | 0=成功, 非0=失败 | 结束时 1 次 |
+| anserAgent → Worker | Exit Code | 0=成功, 非0=失败 | 结束时 1 次 |
 
 ### 2.1.2 执行控制（暂停 / 恢复 / 停止）
 
@@ -1672,11 +1672,11 @@ Worker 监听 Issue 控制命令，通过 Docker API 直接操作沙箱容器：
 
 // internal/sandbox/control.go — 进程级信号控制（非 ContainerPause，避免影响同项目其他 Issue）
 
-func (w *Worker) PauseIssue(issueID)  // kill -STOP <opencode_pid> + 状态 in_progress→paused
+func (w *Worker) PauseIssue(issueID)  // kill -STOP <anseragent_pid> + 状态 in_progress→paused
 
-func (w *Worker) ResumeIssue(issueID) // kill -CONT <opencode_pid> + 状态 paused→in_progress
+func (w *Worker) ResumeIssue(issueID) // kill -CONT <anseragent_pid> + 状态 paused→in_progress
 
-func (w *Worker) StopIssue(issueID)   // kill -TERM <opencode_pid> + 状态 →backlog（worktree 保留可重试）
+func (w *Worker) StopIssue(issueID)   // kill -TERM <anseragent_pid> + 状态 →backlog（worktree 保留可重试）
 
 ```
 
@@ -1728,13 +1728,13 @@ func (w *Worker) StopIssue(issueID)   // kill -TERM <opencode_pid> + 状态 →b
 
 |------|-----------|-----------|---------|----------|
 
-| **暂停** | `kill -STOP <opencode_pid>`（docker exec） | `paused` | 仅该 Issue 的 opencode 进程 | ✅ worktree 保留，内存保留 |
+| **暂停** | `kill -STOP <anseragent_pid>`（docker exec） | `paused` | 仅该 Issue 的 anserAgent 进程 | ✅ worktree 保留，内存保留 |
 
-| **恢复** | `kill -CONT <opencode_pid>`（docker exec） | `in_progress` | 仅该 Issue | ✅ 从断点继续 |
+| **恢复** | `kill -CONT <anseragent_pid>`（docker exec） | `in_progress` | 仅该 Issue | ✅ 从断点继续 |
 
-| **停止** | `kill -TERM <opencode_pid>`（docker exec） | `backlog` | 仅该 Issue | ❌ 进程终止，worktree 保留（待重试复用） |
+| **停止** | `kill -TERM <anseragent_pid>`（docker exec） | `backlog` | 仅该 Issue | ❌ 进程终止，worktree 保留（待重试复用） |
 
-> **为什么不用 ContainerPause？** 容器为项目级常驻，`ContainerPause` 会冻结同项目内所有 Issue。改用进程级信号控制，只能暂停/恢复/停止单个 Issue 的 opencode 进程。
+> **为什么不用 ContainerPause？** 容器为项目级常驻，`ContainerPause` 会冻结同项目内所有 Issue。改用进程级信号控制，只能暂停/恢复/停止单个 Issue 的 anserAgent 进程。
 
 #### 暂停/恢复与 Asynq 任务生命周期
 
@@ -1872,7 +1872,7 @@ Worker 启动
 
 | 非 root 运行 | User `sandbox` (uid 1000)，无 sudo 权限 |
 
-| 镜像最小化 | Alpine 3.21 基础，预装 Node/Python/Git/opencode，不含 Go 运行时 |
+| 镜像最小化 | Alpine 3.21 基础，预装 Git/Bash/anserflow，不含 Node.js/Python |
 
 ### 2.2.1 数据持久化保障
 
@@ -1968,13 +1968,11 @@ RUN apk add --no-cache \
 
 RUN adduser -D -u 1000 sandbox
 
-# opencode — 开源 AI 编码代理（npm 全局安装）
+# anserflow — 自研 AI 编码代理（Go 静态编译二进制）
 
-# https://github.com/anomalyco/opencode
+COPY --from=compiler /build/anserflow /usr/local/bin/anserflow
 
-RUN npm install -g opencode-ai@latest \
-
-    && npm cache clean --force
+RUN chmod +x /usr/local/bin/anserflow
 
 RUN mkdir -p /workspace && chown sandbox:sandbox /workspace
 
@@ -1998,17 +1996,17 @@ ENTRYPOINT ["/entrypoint.sh"]
 
 #   GIT_REPO_URL / GIT_BRANCH / GITHUB_TOKEN → git clone
 
-#   TASK_PROMPT                              → opencode run 的 prompt 参数
+#   TASK_PROMPT                              → anserflow agent run 的 prompt 参数
 
 #
 
-# opencode 配置由 Worker 在容器启动后、执行编码前通过以下方式注入（每次覆盖）：
+# anserAgent 配置由 Worker 在容器启动后、执行编码前通过以下方式注入（每次覆盖）：
 
-#   ① 写入 ~/.config/opencode/config.json   → opencode 读取 provider / model 配置
+#   ① 写入 ~/.anseragent/config.yaml   → anserAgent 读取 provider / model 配置
 
-#   ② 注入环境变量                           → API Key（如 OPENAI_API_KEY）不落盘
+#   ② 注入环境变量                           → API Key（如 ANSERAGENT_API_KEY）不落盘
 
-#   ③ opencode run --model provider/model    → 运行时指定模型
+#   ③ anserflow agent run --model provider/model    → 运行时指定模型
 
 ```
 
@@ -2036,7 +2034,7 @@ func createWorktree(ctx, containerID, issue) error   // git worktree add /worksp
 
 func removeWorktree(ctx, containerID, issueID) error // git worktree remove + branch -D
 
-func execOpenCode(ctx, containerID, issue, task) error // opencode run --workdir /workspace/issue-{id}
+func execAgent(ctx, containerID, issue, task) error // anserflow agent run --workdir /workspace/issue-{id}
 
 func destroyProjectSandbox(ctx, projectID, containerID) error // ContainerRemove + VolumeRemove
 
@@ -2052,15 +2050,15 @@ func destroyProjectSandbox(ctx, projectID, containerID) error // ContainerRemove
 
 ├── runtimes/                                      ← Layer 1: 全局模板（管理员维护）
 
-│   └── opencode/                                  ← 对应 runtimes.name
+│   └── anseragent/                                  ← 对应 runtimes.name
 
 │       ├── skills/                                ← 默认 Skills（如 anser-coder）
 
 │       │   └── anser-coder/SKILL.md
 
-│       ├── config.json                            ← 默认配置模板
+│       ├── config.yaml                            ← 默认配置模板
 
-│       └── plugins/                               ← 预装插件（如 opencode-agent-memory）
+│       └── plugins/                               ← 预装插件
 
 │
 
@@ -2080,11 +2078,11 @@ func destroyProjectSandbox(ctx, projectID, containerID) error // ContainerRemove
 
 沙箱容器                                          ← Layer 3: bind mount
 
-└── /home/sandbox/.opencode/                       ← RuntimeAdapter.HomeDir()
+└── /home/sandbox/.anseragent/                       ← RuntimeAdapter.HomeDir()
 
     ├── skills/                                    ← ← bind mount 自 projects/42/runtime/
 
-    ├── config.json
+    ├── config.yaml
 
     └── plugins/
 
