@@ -10,8 +10,19 @@ anserAgent 是 AnserFlow 的通用智能体内核，基于 Eino ADK（Go 原生 
 
 | 职责 | 场景 | 说明 |
 |------|------|------|
-| **调度编排** | 群聊讨论、/backlog 方案拆解、/todo 快速建任务 | Agent 参与 IM 群聊协作 |
-| **执行编排** | 沙箱编码任务（Issue 执行） | Agent 在 Docker 沙箱内完成编码 |
+| **调度编排** | 群聊中自动识别方案拆解、建任务、生成报告等意图，群内确认后执行 | Agent 参与 IM 群聊协作 |
+| **执行编排** | 编码任务（Issue 执行）/ 办公任务（数据查询、周报、故障排查等） | Agent 在 Docker 沙箱内完成，结果输出到 IM 群聊 |
+
+两种执行模式共享同一个项目级沙箱容器，但挂载资源和工具集不同：
+
+| 维度 | 编码模式 | 办公模式 |
+|------|---------|---------|
+| **Git 仓库** | ✅ git worktree（按 Issue 隔离） | ❌ 不需要 |
+| **DB 连接** | ❌ 不需要 | ✅ 只读凭证（查询项目数据） |
+| **网络出口** | github / api.openai | 额外开放 内部 API / DB 端口 |
+| **工具集** | git / go / npm / test runner | curl / mysql-client / jq |
+| **输出** | commit → PR | 分析结果 → IM 群聊 |
+| **超时** | 30 分钟 | 5 分钟 |
 
 设计理念对齐 Eino ADK 的三大原则：
 - **少写胶水**：统一 `Agent` 接口 + `AsyncIterator` 事件流，编排器无需关心子 Agent 类型
@@ -300,12 +311,13 @@ for {
 
 ## 六、Human-in-the-Loop
 
-参照 Eino ADK 的 HITL 框架，anserFlow 在沙箱编码场景中集成三种人工介入模式：
+参照 Eino ADK 的 HITL 框架，anserFlow 在沙箱编码和群聊调度场景中集成四种人工介入模式：
 
 ### 6.1 模式总览
 
 | 模式 | 触发时机 | anserFlow 场景 |
 |------|---------|---------------|
+| **意图确认模式** | Agent 从自然语言中识别出敏感操作意图，在群聊中发起确认 | 群聊中用户说"整理下本周工作"，Agent 识别为周报生成意图，发确认消息到群，等待人工确认后执行 |
 | **群聊审批模式** | 编码完成后 commit 前中断，在群聊展示 diff 等人工审批 | `git push` / `DB migration` 执行前，Agent 在群聊发变更摘要 + 审批按钮 |
 | **审查编辑模式** | 执行前审查并可原地编辑工具参数 | Agent 生成的代码在 `git commit` 前供人工 review 和修改 |
 | **追问模式** | Agent 发现信息不足主动中断追问 | Issue 需求不明确时，Agent 在 IM 中追问澄清 |
@@ -373,6 +385,101 @@ Agent 生成代码后、`git commit` 前中断，展示 diff 给人工审查，�
 - **批准**：直接提交
 - **拒绝**：Agent 重新生成
 - **编辑**：修改工具调用参数后继续执行
+
+### 6.4 意图识别 + 群聊确认模式
+
+用户不再需要输入显式命令（`/backlog`、`/todo`、`/new`），Agent 从群聊自然语言中自动识别操作意图，在群内发起确认后执行。
+
+**识别流程**：
+
+```
+群聊消息
+    │
+    ▼
+┌─────────────────┐
+│ 意图识别层       │  LLM 分析消息意图
+│ (IntentDetector)│  → 候选意图 + 置信度
+└────────┬────────┘
+         │
+         ▼
+    ┌─────────┐
+    │ 置信度？ │
+    └────┬────┘
+         │
+    ┌────┴────┐
+    │         │
+  高(≥0.8)  低/模糊
+    │         │
+    ▼         ▼
+ 自动执行   ┌──────────────┐
+           │ 构建确认消息   │
+           │ 推送到群聊     │
+           └──────┬───────┘
+                  │
+             ┌────▼────┐
+             │ 群内确认？│
+             └────┬────┘
+                  │
+           ┌──────┴──────┐
+           │             │
+        确认          拒绝/忽略
+           │             │
+           ▼             ▼
+      执行操作      不执行，可追问
+```
+
+**可识别的意图及示例**：
+
+| 群聊消息（自然语言） | 识别意图 | 置信度 | 群聊确认消息 |
+|---------------------|---------|--------|------------|
+| "整理下这周的工作情况" | 周报生成 | 0.92 | "识别到您要生成本周周报，是否确认？[✅确认] [❌取消]" |
+| "这个需求拆一下" | 方案拆解 | 0.88 | "识别到您要对需求进行方案拆解，是否确认？[✅确认] [❌取消]" |
+| "帮我创建几个任务" | 建 Issue | 0.85 | "识别到您要创建任务，请提供任务描述或确认后继续 [✅确认] [❌取消]" |
+| "新话题，聊点别的" | 切换会话 | 0.91 | "识别到您要开始新会话，当前会话将归档。是否确认？[✅确认] [❌取消]" |
+| "查一下数据库" | 模糊 | 0.45 | 不触发确认，追问："您想查询什么数据？例如：本月活跃用户数、项目健康度等" |
+
+**实现**：
+
+```go
+// hitl/intent_confirm.go
+
+type IntentDetector struct {
+    llm            *ChatModelAgent  // 用 LLM 做意图分类
+    intentTreshold float64          // 置信度阈值，默认 0.8
+}
+
+type DetectedIntent struct {
+    Intent      string         // 周报生成 / 方案拆解 / 建Issue / 切换会话 / ...
+    Confidence  float64        // 0.0 ~ 1.0
+    Parameters  map[string]any // 从消息中提取的参数
+}
+
+func (d *IntentDetector) Detect(msg string) (*DetectedIntent, error) {
+    // LLM 分类器：分析消息 → 匹配意图 + 置信度
+    result := d.llm.Classify(ctx, msg, knownIntents)
+    if result.Confidence >= d.intentTreshold {
+        return &DetectedIntent{
+            Intent:     result.Intent,
+            Confidence: result.Confidence,
+            Parameters: d.extractParams(msg, result.Intent),
+        }, nil
+    }
+    // 置信度不足 → 返回 nil，不触发确认（自然对话继续）
+    return nil, nil
+}
+
+func (d *IntentDetector) BuildConfirmation(intent *DetectedIntent) ChatConfirmationMessage {
+    return ChatConfirmationMessage{
+        Text:    fmt.Sprintf("识别到您要%s，是否确认？", intent.Label()),
+        Buttons: []ChatButton{
+            {Label: "✅ 确认", Action: "confirm"},
+            {Label: "❌ 取消", Action: "cancel"},
+        },
+    }
+}
+```
+
+**与 Runner 的衔接**：意图确认走中断机制，确认后通过 `Runner.Resume` 恢复执行。低置信度不触发中断，Agent 以自然追问方式澄清。
 
 ---
 
@@ -693,7 +800,7 @@ const (
 | Agent 被调用 | Recall 相关记忆 | L1 路由 → L2 + L3 + L4 |
 | Agent 调用中 | Store 中间结果到上下文 | 运行时内存（不持久化） |
 | Agent 调用结束 | 回复内容记入会话 | 运行时内存 |
-| /new 切换会话 | SummarizeAndArchive 当前会话 | L4（归档） |
+| Agent 识别切换会话意图并群内确认后 | SummarizeAndArchive 当前会话 | L4（归档） |
 | Issue 执行完成 | 执行经验总结写入文件 | L4（归档）+ L2（新事实） |
 | 同类任务 ≥3 次 | MaybeCrystallize 生成新 SOP | L3（Skills） |
 | Skill 执行失败 | Improve 失败 Skill | L3（Skills 自改进） |
@@ -1288,7 +1395,7 @@ CREATE TABLE skill_generation_logs (
 | 原 Skill | 迁移到 | 说明 |
 |----------|--------|------|
 | ~~eino-discuss~~ | **L0 元规则** | 讨论行为约束内化为元规则 |
-| ~~eino-backlog~~ | **L3 Skill** | /backlog 方案拆解作为可自改进的 SOP |
+| ~~eino-backlog~~ | **L3 Skill** | 方案拆解作为可自改进的 SOP（Agent 自动识别群聊意图触发） |
 | ~~eino-optimizer~~ | **SkillImprover** | 提示词优化逻辑由自改进引擎接管 |
 | ~~eino-planner~~ | **L3 Skill** | 任务编排 SOP，可自动生成 |
 | ~~eino-* 硬编码编排~~ | **Workflow Agents + Runner** | 编排逻辑交由 Eino ADK Sequential/Parallel/Loop Agent + Runner 统一管理 |
