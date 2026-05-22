@@ -1696,6 +1696,22 @@ exit 0                              │ 检查: 退出码=0 + 质量门禁     �
 
 | anserAgent → Worker | Exit Code | 0=成功, 非0=失败 | 结束时 1 次 |
 
+#### RTK 命令输出压缩（Phase 2）
+
+> 参考 [yolobox](https://github.com/finbarr/yolobox) 的 RTK（command-output compression proxy）设计思路。详见 [11-backlog.md](11-backlog.md) §RTK 命令输出压缩。
+
+anserAgent 执行过程中会产生大量 stdout 输出（如测试日志、构建输出、lint 报告），其中大部分内容体积大但信息密度低。Phase 2 可引入命令输出压缩代理，在以下环节减少存储和传输开销：
+
+- **存储端**：`agent_logs` 写入前对 stdout 做智能摘要（仅保留关键行 + 错误信息）
+- **传输端**：WebSocket 推送前对大段输出做截断/折叠
+- **Token 侧**：当命令输出需要回传给 LLM 做上下文时，自动压缩后再注入
+
+| 优化环节 | 当前方案 | RTK 压缩后 |
+|---------|---------|-----------|
+| MySQL `agent_logs` | 全量存储每条 stdout | 仅存摘要 + 关键行 |
+| WebSocket 推送 | 全量推送每条日志 | 折叠大段输出 + 错误高亮 |
+| LLM 上下文注入 | 原始输出直接注入 | 压缩后注入，减少 Token 消耗 |
+
 ### 2.1.2 执行控制（暂停 / 恢复 / 停止）
 
 Worker 监听 Issue 控制命令，通过 Docker API 直接操作沙箱容器：
