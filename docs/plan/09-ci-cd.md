@@ -238,7 +238,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: 'AnserFlow ${{ github.ref_name }}'
-          body: 'See [CHANGELOG.md](./CHANGELOG.md)'
+          body: 'Release artifacts for this tag.'
           files: |
             */anserflow*
             checksums.txt

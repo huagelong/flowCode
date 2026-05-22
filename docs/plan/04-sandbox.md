@@ -472,6 +472,8 @@ s.messageService.SendSystemMessage(ctx, issue.SourceGroupID,
 
 Issue 状态流转逻辑分散在 `IssueService`、`Worker`、`Scheduler`、`WebhookHandler` 四处，通过 `StatusManager` 集中管理状态机规则和副作用触发。
 
+> **Phase 1 基线**：当前状态机以 [02-api.md](02-api.md) 定义的显式命令流 + GitHub PR 审核流为准。群聊审批/HITL 仅作为 [Phase 2](11-backlog.md) 预研能力，不纳入本节主状态流转。
+
 **设计原则**：
 
 - 状态流转合法表集中定义，不散落在 if/switch 中
@@ -490,15 +492,15 @@ Issue 状态流转逻辑分散在 `IssueService`、`Worker`、`Scheduler`、`Web
 
 | `todo` | `in_progress` | Scheduler 分配 | 群聊通知 + 时间线 + 通知被分配人 |
 
-| `in_progress` | `in_review` | 编码完成，Agent 发起群聊审批 | 群聊通知（含 diff 摘要 + 审批按钮）+ 时间线 |
+| `in_progress` | `in_review` | 编码完成，Agent 推送代码并创建 PR | 群聊通知 + 时间线 + PR 链接 |
 
 | `in_progress` | `paused` | 人工暂停 | 群聊通知 + 时间线 |
 
 | `in_progress` | `todo` | Worker 执行失败 | 群聊通知 + 时间线 + retry_count++ |
 
-| `in_review` | `done` | 群聊中人工点「批准」→ push + auto-merge | 群聊通知 + 时间线 + worktree 清理 |
+| `in_review` | `done` | GitHub Webhook 通知 PR 已 merge | 群聊通知 + 时间线 + worktree 清理 |
 
-| `in_review` | `todo` | 群聊中人工点「拒绝」 | 群聊通知 + 时间线（worktree 保留待重试） |
+| `in_review` | `todo` | PR 被拒绝/关闭未合并 | 群聊通知 + 时间线（worktree 保留待重试） |
 
 | `todo` | `backlog` | 人工退回 | 时间线 |
 
@@ -1106,6 +1108,8 @@ func (d *Dispatcher) Execute(ctx context.Context, llmOutput string, agent *model
 
 ### `/backlog` 与 `/todo` 指令识别
 
+> **当前阶段入口**：Phase 1 仍使用显式命令 `/backlog`、`/todo`、`/new` 驱动。自然语言意图识别替代显式命令见 [06-agent.md](06-agent.md) §6.4，属于 [Phase 2](11-backlog.md) 能力。
+
 anserAgent 在群聊中监听 WebSocket 消息，检测到 `/backlog` 或 `/todo` 指令时触发方案拆解流程。两者共享 anserAgent 编排逻辑，区别仅在于 Issue 创建时的初始状态：
 
 ```go
@@ -1550,33 +1554,33 @@ docker exec anserflow-project-1 git branch -D feat/issue-42
 
 │  │  │                                                  │  │
 
-│  │  ├── 通过 → 进入群聊审批流程（见 Step 6）              │  │
+│  │  ├── 通过 → git push + 创建 PR → 进入 in_review         │  │
 
 │  │  └── 失败 → 写时间线 → Issue → todo                   │  │
 
 │  │                                                    │  │
 
-│  │  Step 6: 群聊审批 + 合并                            │  │
+│  │  Step 6: GitHub PR 审核 + 合并                      │  │
 
 │  │  ├── anserAgent 检查通过:                            │  │
 
 │  │  │   ├── git add → commit（在 worktree 内）        │  │
 
-│  │  │   ├── [HITL 中断] 发送群聊审批消息              │  │
+│  │  │   ├── git push + 创建 Pull Request              │  │
 
-│  │  │   │   ├── 内容：变更摘要 + Diff 统计 + 质量门禁  │  │
+│  │  │   │   ├── Worker 写入 PR URL + 质量结果         │  │
 
-│  │  │   │   └── 按钮：[✅ 批准合并] [❌ 拒绝] [💬 意见]│  │
+│  │  │   │   └── Issue 状态 → in_review                │  │
 
-│  │  │   ├── 人工点「批准」→ git push + auto-merge    │  │
+│  │  │   ├── 自然人在 GitHub 审核并合并 PR             │  │
 
-│  │  │   │   ├── Worker 执行 squash merge 到 main       │  │
+│  │  │   │   ├── Webhook 通知 PR merged                │  │
 
 │  │  │   │   ├── 更新 Issue → done                     │  │
 
 │  │  │   │   └── git worktree remove + branch -D       │  │
 
-│  │  │   └── 人工点「拒绝」→ Issue → todo（保留 worktree）│
+│  │  │   └── PR 被拒绝/关闭未合并 → Issue → todo       │
 
 │  │  ├── anserAgent 检查失败:                            │  │
 
@@ -1648,33 +1652,31 @@ exit 0                              │ 检查: 退出码=0 + 质量门禁     �
 
                                     │ git commit                    │
 
-                                    │ issue → in_review ────────────→ "编码完成，等待审批"
+                                    │ git push + create PR          │
 
                                     │                               │
 
-                                    │ [HITL 中断] 发送群聊审批消息   │
-
-                                    │ ├─ 变更摘要 (diff stat)        │
-
-                                    │ ├─ 质量门禁结果               │
-
-                                    │ └─ [批准/拒绝/意见] 按钮      │
+                                    │ issue → in_review ────────────→ "PR 已提交，等待审核"
 
                                     │                               │
 
-                                    │ 用户点「批准」→ git push      │
-
-                                    │              → squash merge   │
+                                    │ GitHub Webhook: PR merged     │
 
                                     │              → worktree remove│
+
+                                    │                               │
 
                                     │ issue → done ─────────────────→ "已合并到 main ✅"
 
                                     │                               │
 
-                                    │ 用户点「拒绝」                │
+                                    │ GitHub Webhook: PR closed     │
 
-                                    │ issue → todo ─────────────────→ "审批未通过，已退回"
+                                    │          (not merged)         │
+
+                                    │                               │
+
+                                    │ issue → todo ─────────────────→ "PR 未合并，已退回"
 
                                     └───────────────────────────────┘
 

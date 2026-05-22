@@ -315,6 +315,8 @@ for {
 
 ### 6.1 模式总览
 
+> **阶段说明**：本节 Human-in-the-Loop 相关模式均为 [Phase 2](11-backlog.md) 预研设计，不纳入当前 L1-L4 主流程。当前 Phase 1 仍以显式命令 `/backlog`、`/todo`、`/new` 触发讨论/执行，并以 GitHub PR 审核闭环，详见 [02-api.md](02-api.md) 与 [04-sandbox.md](04-sandbox.md)。
+
 | 模式 | 触发时机 | anserFlow 场景 |
 |------|---------|---------------|
 | **意图确认模式** | Agent 从自然语言中识别出敏感操作意图，在群聊中发起确认 | 群聊中用户说"整理下本周工作"，Agent 识别为周报生成意图，发确认消息到群，等待人工确认后执行 |
@@ -322,7 +324,7 @@ for {
 | **审查编辑模式** | 执行前审查并可原地编辑工具参数 | Agent 生成的代码在 `git commit` 前供人工 review 和修改 |
 | **追问模式** | Agent 发现信息不足主动中断追问 | Issue 需求不明确时，Agent 在 IM 中追问澄清 |
 
-### 6.2 群聊审批模式（合并审批）
+### 6.2 [Phase 2] 群聊审批模式（合并审批）
 
 编码完成后、push 前，Agent 通过 HITL 中断在群聊中发起合并审批，展示变更摘要、diff 统计和质量门禁结果，由人工在群聊中一键批准或拒绝。
 
@@ -379,16 +381,16 @@ func (t *ChatApprovalTool) InvokableRun(ctx context.Context, input string) (stri
 
 > **与 Agent 主循环的衔接**：ChatModelAgent 的 `executeTool` 方法（见 [10.2 anserAgent 实现](#102-anseragent-实现)）检测到 `InterruptError` 后，不会将其作为普通错误处理，而是构造 `AgentEvent{Action: {Interrupted: &InterruptContext{...}}}` 并停止当前 ReAct 循环。调用方通过 `Runner.Query` 的事件迭代器收到该事件后，由 Worker 构建群聊审批消息（含变更摘要 + 按钮）推送到 IM。人工点击按钮后通过 `Runner.Resume` 传入审批结果继续执行。
 
-### 6.3 审查编辑模式
+### 6.3 [Phase 2] 审查编辑模式
 
 Agent 生成代码后、`git commit` 前中断，展示 diff 给人工审查，人工可以：
 - **批准**：直接提交
 - **拒绝**：Agent 重新生成
 - **编辑**：修改工具调用参数后继续执行
 
-### 6.4 意图识别 + 群聊确认模式
+### 6.4 [Phase 2] 意图识别 + 群聊确认模式
 
-用户不再需要输入显式命令（`/backlog`、`/todo`、`/new`），Agent 从群聊自然语言中自动识别操作意图，在群内发起确认后执行。
+作为远期模式，用户不再需要输入显式命令（`/backlog`、`/todo`、`/new`），Agent 从群聊自然语言中自动识别操作意图，在群内发起确认后执行。当前 Phase 1 仍以显式命令作为唯一稳定入口。
 
 **识别流程**：
 
@@ -1411,12 +1413,14 @@ CREATE TABLE skill_generation_logs (
 | anserAgent 内核（Eino ChatModelAgent ReAct） | ✅ | ✅ |
 | Workflow Agents（Sequential / Parallel / Loop） | ✅ | ✅ |
 | Runner 执行容器（事件流 + CheckPoint 管理） | ✅ | ✅ |
+| 显式命令驱动（`/backlog` / `/todo` / `/new`） | ✅ | ✅ |
 | 中断与恢复（CheckPointStore） | ✅ | ✅ |
 | 五层记忆（L0~L4）+ Wiki 文件存储 | ✅ | ✅ |
 | Skill 自动生成（R01~R05） | ✅ | ✅ |
 | Skill 过时检测 + 自改进 | ✅ | ✅ |
 | 调度编排 + 沙箱执行编排 | ✅ | ✅ |
 | Human-in-the-Loop（审批中断） | ❌ | ✅ |
+| 自然语言意图识别替代显式命令 | ❌ | ✅ |
 | 记忆语义检索（向量） | ❌ | ✅ |
 | Multi-Agent 范式（Supervisor / Plan-Execute） | ❌ | ✅ |
 | Skill 版本回滚 | ❌ | ✅ |

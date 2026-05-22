@@ -20,6 +20,8 @@ docs/
     └── 11-backlog.md              ← 远期 backlog 规划
 ```
 
+> 说明：`05` 编号当前预留，暂无对应文档；`04b` 作为 `04-sandbox.md` 的运行时补充文档存在。
+
 ## 阅读顺序建议
 
 | 阅读顺序 | 文件 | 目的 |
@@ -34,7 +36,7 @@ docs/
 | 7 | `09-ci-cd.md` | CI/CD：GitHub Actions 工作流 |
 | 8 | `08-deployment.md` | 部署：单机/分布式方案 |
 | 9 | `10-roadmap.md` | 路线图：L1-L4 交付计划 |
-| 11 | `11-backlog.md` | 远期规划（Phase 2） |
+| 10 | `11-backlog.md` | 远期规划（Phase 2） |
 
 ## 引用说明
 
@@ -44,4 +46,4 @@ docs/
 - 数据库 DDL 位于 `docs/ddl.sql`
 - 各文件中标注的 **Phase 1** 内容属于 L1-L4 路线图范围，**Phase 2** 为远期规划
 
-> 最后更新：2026-05-21
+> 最后更新：2026-05-22
