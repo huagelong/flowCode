@@ -1,0 +1,13 @@
+> ???`docs/plan/04b-sandbox-runtime.md` ? 325 ?
+> ???[???](../../README.md) -> [AnserFlow - 沙箱执行运行时](../README.md) -> [三、扩展新运行时指南](README.md) -> 步骤 3: 更新 Dockerfile
+> ???[???](02-步骤-2-替换初始化.md) ? ?????
+> ?????[??????](README.md) ? [??????](../README.md)
+
+### 步骤 3: 更新 Dockerfile
+
+```dockerfile
+# 添加新运行时的安装步骤
+RUN curl -fsSL https://claude.ai/install.sh | sh
+```
+
+Worker 代码无需修改，完全通过接口隔离。
