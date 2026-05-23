@@ -9,7 +9,7 @@
 >
 > 参考代码映射见 [07-architecture.md](../07-architecture/README.md) §建议保留的模块 / 建议废弃的模块 / 建议做映射迁移的模块。
 >
-> **实现代码**：本文档中的实现级代码示例已外提至 [sandbox-code-examples.md](../../reference/sandbox-code-examples.md)，文中通过链接引用。
+> **实现代码**：本文档中的实现级代码示例已外提至 [sandbox-code-examples.md](../../../reference/sandbox-code-examples.md)，文中通过链接引用。
 
 ---
 

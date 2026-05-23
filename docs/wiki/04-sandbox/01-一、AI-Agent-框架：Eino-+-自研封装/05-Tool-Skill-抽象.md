@@ -5,4 +5,4 @@
 
 ### Tool / Skill 抽象
 
-**实现代码**: [sandbox-code-examples.md §Skill 加载](../../../reference/sandbox-code-examples.md#tool--skill-抽象)
+**实现代码**: [sandbox-code-examples.md §Skill 加载](../../../../reference/sandbox-code-examples.md#tool--skill-抽象)

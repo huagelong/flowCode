@@ -41,8 +41,8 @@ todoOutput      任务计划输出文件
 推断顺序：
 
 1. 优先使用用户明确给出的路径。
-2. 如果用户只给出 `wiki/README.md`，则 `wikiDir` 是其父目录，`wikiIndex` 是该文件。
-3. 如果用户只说"根据 wiki 生成 todo"，优先查找当前项目中已有的 wiki 索引，例如 `<wikiDir>/README.md`；不要假设只有根目录 `wiki/README.md`。
+2. 如果用户只给出 `docs/wiki/README.md`，则 `wikiDir` 是其父目录，`wikiIndex` 是该文件。
+3. 如果用户只说"根据 wiki 生成 todo"，优先查找当前项目中已有的 wiki 索引，例如 `<wikiDir>/README.md`；不要假设只有根目录 `docs/wiki/README.md`。
 4. 如果用户只说"根据 docs 生成 wiki"，优先查找当前项目中明显的 Markdown 文档目录，例如 `docs/`；如果存在多个候选且无法判断，按以下决策顺序处理：分析各候选目录的上下文与当前任务相关性，推断最优候选并执行；无法推断则停止任务并说明原因。
 5. 如果用户要求输出到 `todos.md`，按要求写入；否则将任务计划写入用户指定的 `todoOutput`，没有指定时才默认使用项目根目录的 `todos.md`。
 
@@ -90,7 +90,7 @@ todoOutput      任务计划输出文件
 
 ## 生成 todo list 流程
 
-当用户要求"根据 wiki/README.md 生成 vibe coding 任务计划，要求先简单后复杂；每个任务指向对应的 wiki 小文档；任务计划放到 todos.md 文档"时，执行以下流程。
+当用户要求"根据 docs/wiki/README.md 生成 vibe coding 任务计划，要求先简单后复杂；每个任务指向对应的 wiki 小文档；任务计划放到 todos.md 文档"时，执行以下流程。
 
 1. 读取 `wikiIndex`。
    - 提取快速入口、推荐检索路径、关系图谱、细分文档树。

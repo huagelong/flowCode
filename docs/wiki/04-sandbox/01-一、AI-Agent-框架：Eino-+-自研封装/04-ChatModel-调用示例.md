@@ -5,4 +5,4 @@
 
 ### ChatModel 调用示例
 
-**实现代码**: [sandbox-code-examples.md §ChatModel 调用](../../../reference/sandbox-code-examples.md#chatmodel-调用示例)
+**实现代码**: [sandbox-code-examples.md §ChatModel 调用](../../../../reference/sandbox-code-examples.md#chatmodel-调用示例)

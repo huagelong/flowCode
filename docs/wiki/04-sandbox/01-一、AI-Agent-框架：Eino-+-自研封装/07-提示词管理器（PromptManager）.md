@@ -41,7 +41,7 @@
 
 | `error_templates.go` | `error.backlog_no_plan` | /backlog 生成失败 | `command_handler.go` |
 
-**实现代码**: [sandbox-code-examples.md §PromptManager](../../../reference/sandbox-code-examples.md#tool--skill-抽象)
+**实现代码**: [sandbox-code-examples.md §PromptManager](../../../../reference/sandbox-code-examples.md#tool--skill-抽象)
 
 ```
 

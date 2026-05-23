@@ -33,7 +33,7 @@ wikiIndex       wiki 总目录文件（默认 wikiDir 下的 README.md）
 
 1. 优先使用用户明确给出的路径。
 2. 如果用户只说"生成 wiki"或"整理文档"，优先查找当前项目中明显的 Markdown 文档目录（如 `docs/`、`doc/`、`documentation/`）；如果存在多个候选且无法判断，按以下决策顺序处理：分析各候选目录的上下文与当前任务相关性，推断最优候选并执行；无法推断则停止任务并说明原因。
-3. 如果用户指定了输出位置，`wikiDir` 取该位置；否则默认使用项目根目录下的 `wiki/`。
+3. 如果用户指定了输出位置，`wikiDir` 取该位置；否则默认使用项目根目录下的 `docs/wiki/`。
 4. `wikiIndex` 默认为 `wikiDir/README.md`，除非用户指定了其他索引文件名。
 5. 如果本 Skill 的副本也在 `wikiDir` 下，生成业务 wiki 时不要覆盖或移动该 Skill 目录。
 

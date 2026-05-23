@@ -7,4 +7,4 @@
 
 Eino 使用 `config.yaml` 中 `llm` 配置段统一管理多 Agent 的模型连接：
 
-**实现代码**: [sandbox-code-examples.md §Eino 初始化](../../../reference/sandbox-code-examples.md#eino-初始化与配置)
+**实现代码**: [sandbox-code-examples.md §Eino 初始化](../../../../reference/sandbox-code-examples.md#eino-初始化与配置)

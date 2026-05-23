@@ -128,7 +128,7 @@ Worker streamLogs() 捕获
 
 **前端组件结构**：
 
-> 📎 完整代码示例: [reference/frontend-code-examples.md](../../reference/frontend-code-examples.md) §客户端 — IssueDetail 组件 / IssueTimeline 组件
+> 📎 完整代码示例: [reference/frontend-code-examples.md](../../../reference/frontend-code-examples.md) §客户端 — IssueDetail 组件 / IssueTimeline 组件
 
 **工具栏按钮状态控制**：
 

@@ -7,7 +7,7 @@
 
 Worker 通过 RuntimeClient 向沙箱注入 Skills 配置时，合并 Runtime 默认 + Agent 独立绑定，Agent 可覆盖关闭 Runtime 继承的 Skill。Skills 以 JSON Lines 消息随任务一并发送给沙箱内运行的工具：
 
-**实现代码**: [sandbox-code-examples.md §Skill 两层继承](../../../reference/sandbox-code-examples.md#skill-两层继承)
+**实现代码**: [sandbox-code-examples.md §Skill 两层继承](../../../../reference/sandbox-code-examples.md#skill-两层继承)
 
 **Skill 注入规则**：
 

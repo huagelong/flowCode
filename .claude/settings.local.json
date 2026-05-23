@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p d:/code/anserFlow/.claude/skills)",
+      "Bash(cp d:/code/anserFlow/.qoder/skills/flowcode-design/SKILL.md d:/code/anserFlow/.claude/skills/flowcode-design.md)",
+      "Bash(cp d:/code/anserFlow/.qoder/skills/flowcode-executor/SKILL.md d:/code/anserFlow/.claude/skills/flowcode-executor.md)",
+      "Bash(cp d:/code/anserFlow/.qoder/skills/flowcode-todo/SKILL.md d:/code/anserFlow/.claude/skills/flowcode-todo.md)",
+      "Bash(cp d:/code/anserFlow/.qoder/skills/flowcode-ui/SKILL.md d:/code/anserFlow/.claude/skills/flowcode-ui.md)",
+      "Bash(cp d:/code/anserFlow/.qoder/skills/flowcode-wiki/SKILL.md d:/code/anserFlow/.claude/skills/flowcode-wiki.md)",
+      "Bash(mv d:/code/anserFlow/wiki d:/code/anserFlow/docs/wiki)",
+      "Bash(sed -i 's|默认使用项目根目录下的 `wiki/`|默认使用项目根目录下的 `docs/wiki/`|g' d:/code/anserFlow/.claude/skills/flowcode-wiki.md d:/code/anserFlow/.qoder/skills/flowcode-wiki/SKILL.md d:/code/anserFlow/.opencode/skills/flowcode-wiki/SKILL.md d:/code/anserFlow/.codex/skills/flowcode-wiki/SKILL.md)"
+    ],
+    "additionalDirectories": [
+      "d:\\code\\anserFlow\\.claude",
+      "d:\\code\\anserFlow\\.claude\\skills",
+      "d:\\code\\anserFlow\\wiki"
+    ]
+  }
+}
