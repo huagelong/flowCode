@@ -159,3 +159,21 @@ Worker streamLogs() 捕获
 | 人+人（direct, 无 Agent） | @Agent 选择器、/backlog 按钮、Agent 成员头像、成员管理面板 | 纯文本输入框、/new 按钮 |
 | 人+Agent（direct, 有 Agent） | @Agent 选择器（只有 1 个 Agent，无需 @）、成员管理面板 | /backlog 按钮、/new 按钮、Agent 头像标识、Agent 回复消息 |
 | 群聊（group） | — | 全部功能 |
+
+### 架构注意事项
+
+> **静态导出限制**：当前方案使用 Next.js `output: "export"` 静态导出 + Go embed。以下功能在纯 SPA 模式下不可用，需通过替代方案实现：
+>
+> | 功能 | 静态导出限制 | 替代方案 |
+> |------|------------|---------|
+> | API Routes | 不可用 | 全部走 Go 后端 API |
+> | Server Components | 不可用 | 纯 Client Components + TanStack Query |
+> | Image Optimization | 不可用 | 使用 `<img>` + CDN 或预压缩图片 |
+> | i18n 路由中间件 | 不可用 | 客户端检测 locale + localStorage 存储 |
+> | 基于路由的代码分割 | 部分受限 | 使用 `next/dynamic` 手动分割 |
+>
+> **Admin SPA vs Client SPA**：
+> - Admin（`/admin`）：内容固定、无实时需求 → 静态导出适合
+> - Client（`/`）：实时聊天、Agent 日志流 → 如首屏性能不达标，可考虑升级为独立部署的 SSR 模式
+> - 共享代码：通过 npm workspace 的 `@anserflow/shared-ui` 包共享组件、类型、工具函数
+> - Go 路由器通过 `basePath` 前缀区分两个 SPA 的静态资源

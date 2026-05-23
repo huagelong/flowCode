@@ -105,6 +105,8 @@ CREATE TABLE agent_logs (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_agent_time (agent_id, created_at),
     INDEX idx_issue (issue_id),
+    INDEX idx_org_time (org_id, created_at),
+    INDEX idx_type_status (type, status),
     FOREIGN KEY (org_id) REFERENCES organizations(id),
     FOREIGN KEY (agent_id) REFERENCES agents(id),
     FOREIGN KEY (issue_id) REFERENCES issues(id),
@@ -180,10 +182,10 @@ CREATE TABLE issues (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (project_id) REFERENCES projects(id),
     FOREIGN KEY (parent_id) REFERENCES issues(id),
-    FOREIGN KEY (created_by) REFERENCES users(id)
+    FOREIGN KEY (created_by) REFERENCES users(id),
+    INDEX idx_project_status_created (project_id, status, created_at),
+    INDEX idx_assignee_status (created_by, status)
 );
-
-CREATE TABLE issue_assignee (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     issue_id BIGINT NOT NULL,
     user_id BIGINT NULL,
@@ -251,7 +253,8 @@ CREATE TABLE messages (
     FOREIGN KEY (group_id) REFERENCES groups(id),
     FOREIGN KEY (sender_user_id) REFERENCES users(id),
     FOREIGN KEY (sender_agent_id) REFERENCES agents(id),
-    INDEX idx_group_session (group_id, session_id, created_at)
+    INDEX idx_group_session (group_id, session_id, created_at),
+    INDEX idx_sender_user (sender_user_id, created_at)
 );
 
 CREATE TABLE invitations (
@@ -325,6 +328,7 @@ CREATE TABLE agent_checkpoints (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_agent_project (agent_id, project_id),
     INDEX idx_status (status),
+    INDEX idx_status_updated (status, updated_at),
     FOREIGN KEY (agent_id) REFERENCES agents(id),
     FOREIGN KEY (project_id) REFERENCES projects(id)
 );
