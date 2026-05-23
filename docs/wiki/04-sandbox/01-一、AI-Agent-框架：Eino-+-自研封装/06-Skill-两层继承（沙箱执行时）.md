@@ -15,8 +15,6 @@ Worker 通过 RuntimeClient 向沙箱注入 Skills 配置时，合并 Runtime �
 
 |-------|------|---------|------|
 
-| `anser-coder` | Runtime 默认（anserAgent） | ❌ 不可关闭 | `is_builtin=1`，前端灰掉开关 |
-
 | 用户创建的 Skill | Runtime 默认 / Agent 绑定 | ✅ 可开关 | 后台自由管理 |
 
 | Agent 主动关闭 Runtime Skill | Agent 级覆盖 | ✅ | `agent_skills.enabled=false` 覆盖 Runtime 默认 |

@@ -14,6 +14,4 @@
 | ~~eino-optimizer~~ | **SkillImprover** | 提示词优化逻辑由自改进引擎接管 |
 | ~~eino-planner~~ | **L3 Skill** | 任务编排 SOP，可自动生成 |
 | ~~eino-* 硬编码编排~~ | **Workflow Agents + Runner** | 编排逻辑交由 Eino ADK Sequential/Parallel/Loop Agent + Runner 统一管理 |
-| anser-coder | 保留 | 沙箱执行规范，不变 |
-
 ---
