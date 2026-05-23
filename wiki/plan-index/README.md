@@ -3,7 +3,7 @@
 > 相邻：[上一篇](../11-backlog/README.md) · 下一篇：无
 > 相关主题：[上一份源文档](../11-backlog/README.md)
 
-﻿# AnserFlow 文档索引
+# AnserFlow 文档索引
 
 ## 章节导航
 

@@ -3,7 +3,7 @@
 > 相邻：[上一篇](../03-client/README.md) · [下一篇](../04b-sandbox-runtime/README.md)
 > 相关主题：[上一份源文档](../03-client/README.md) · [下一份源文档](../04b-sandbox-runtime/README.md)
 
-﻿# AnserFlow - 沙箱 / Agent 基础设施
+# AnserFlow - 沙箱 / Agent 基础设施
 
 > **职责边界**：本文档覆盖 Agent 基础设施层（Eino 框架、状态机、通知、Git、Token 追踪、Skill 导入）。Agent 大脑设计（五层记忆、Skill 自改进、调度编排）见 [06-agent.md](../06-agent/README.md)。沙箱执行运行时（SandboxManager / RuntimeManager）见 [04b-sandbox-runtime.md](../04b-sandbox-runtime/README.md)。
 >

@@ -3,7 +3,7 @@
 > 相邻：[上一篇](../04-sandbox/README.md) · [下一篇](../06-agent/README.md)
 > 相关主题：[上一份源文档](../04-sandbox/README.md) · [下一份源文档](../06-agent/README.md)
 
-﻿# AnserFlow - 沙箱执行运行时
+# AnserFlow - 沙箱执行运行时
 
 > **职责边界**：本文档覆盖 Docker 沙箱运行时适配器模式。Agent 基础设施层（Eino 框架、状态机、通知、Git、Token）见 [04-sandbox.md](../04-sandbox/README.md)。
 >
