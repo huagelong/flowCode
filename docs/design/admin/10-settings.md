@@ -71,7 +71,7 @@
 | default_provider | Select | openai | 默认 LLM 提供商 |
 | default_model | Input | gpt-4o | 默认模型 |
 | discuss_max_context | Number | 50 | 讨论 context 最大消息数 |
-| backlog_max_issues | Number | 5 | /backlog 单次最大 Issue 数 |
+| backlog_max_issues | Number | 5 | Agent 自动生成方案时单次最大 Issue 数 |
 | optimizer_enabled | Switch | true | Prompt 优化器 |
 | rate_limit | Number | 20 | 每分钟请求限制 |
 

@@ -80,7 +80,7 @@
 | Dashboard | `LayoutDashboard` | 欢迎使用 AnserFlow | 创建项目和 Agent 开始协作 | [创建项目] [创建 Agent] |
 | Agent 列表 | `Bot` | 还没有 Agent | 创建你的第一个 AI Agent | [创建 Agent] |
 | 项目列表 | `FolderKanban` | 还没有项目 | 创建项目开始管理 Issue | [创建项目] |
-| Issue (某状态) | `CircleDot` | 暂无 backlog Issue | 通过 /backlog 命令或手动创建 | [创建 Issue] |
+| Issue (某状态) | `CircleDot` | 暂无 backlog Issue | 通过群组讨论让 Agent 自动生成或手动创建 | [创建 Issue] |
 | Skill 列表 | `Zap` | 还没有技能 | 创建或导入 Agent 技能 | [创建 Skill] |
 | 会话列表 | `MessageSquare` | 开始新对话 | 搜索用户或 Agent 开始对话 | — |
 | 聊天窗口 | `MessageSquare` | 开始对话 | 输入消息或使用命令 | — |

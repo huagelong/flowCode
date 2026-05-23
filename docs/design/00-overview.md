@@ -82,9 +82,11 @@ AnserFlow 是一个 AI Agent + 自然人混合协作平台，核心场景：
 | [components/14-through-20.md](components/14-through-20.md) | Notification / EmptyState / Sidebar / FormBuilder / AgentLog / TokenUsage / Pagination |
 
 ### 共享页面 (Shared)
-- [shared/00-auth-pages.md](shared/00-auth-pages.md) — 登录 / 注册 / OAuth
+- [shared/00-auth-pages.md](shared/00-auth-pages.md) — 登录 / 注册 / OAuth / 忘记密码
 - [shared/01-error-pages.md](shared/01-error-pages.md) — 404 / 403 / 500 错误页
 - [shared/02-invite-accept.md](shared/02-invite-accept.md) — 邀请接受页
+- [shared/03-loading-patterns.md](shared/03-loading-patterns.md) — 骨架屏 / 加载态 / 过渡动画
+- [shared/04-keyboard-a11y.md](shared/04-keyboard-a11y.md) — 键盘快捷键 / 无障碍
 
 ## 设计原则
 

@@ -287,6 +287,6 @@
 ```
         [📋 图标]
    暂无 backlog Issue
- 通过群组聊天中的 /backlog 命令
+ 通过群组讨论让 Agent 自动生成
  或手动创建 Issue
 ```

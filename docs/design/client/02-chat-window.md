@@ -64,7 +64,7 @@
 │ │  ┌────┐                                                  │ │
 │ │  │ 👤 │  张三                              14:35         │ │
 │ │  └────┘                                                  │ │
-│ │  /backlog                                                 │ │
+│ │  帮我拆解一下这个需求，生成执行计划                       │ │
 │ │  ─────────────────────────────                           │ │
 │ │  ┌────┐                                                  │ │
 │ │  │ 📦 │  系统                              14:36         │ │
@@ -132,7 +132,7 @@
 
 #### Backlog 确认卡片 (backlog_ack)
 
-`/backlog` 命令生成的 Issue 需要人工确认，在聊天中以交互卡片形式展示：
+当 Agent 在讨论中识别到可执行的需求时，自动生成 Issue 方案卡片，需人工确认：
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -159,22 +159,65 @@
 | 拒绝按钮 | `variant="ghost" size="sm" text-destructive` |
 
 **交互流程**:
-1. Agent 通过 `/backlog` 生成 Issue → 聊天中显示确认卡片
+1. Agent 在讨论中识别到需求 → 自动生成 Issue 方案 → 聊天中显示确认卡片
 2. 用户点击"确认转 Todo" → `backlog_ack { accepted: true }` → Issue 状态变为 `todo` → 卡片更新为"已确认 ✓"
 3. 用户点击"拒绝" → `backlog_ack { accepted: false }` → Issue 保持 `backlog` → 卡片更新为"已拒绝 ✗"
 4. 确认后卡片变为只读态：`bg-muted/50`，按钮替换为状态文字
 
-#### 命令消息 (/backlog, /todo)
+#### 任务创建卡片
+
+当 Agent 判断需求明确时，可直接创建可执行 Issue（无需人工确认）。展示为系统通知卡片：
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ ✅ 任务已创建                                             │
+│                                                          │
+│ #43 添加注册页面表单验证                                   │
+│ P2 · 分配给: 🤖 前端Agent · 已加入执行队列                 │
+│                                                          │
+│                                              [查看 →]    │
+└──────────────────────────────────────────────────────────┘
+```
+
+| 属性 | 值 |
+|------|------|
+| 背景 | `bg-green-50/50 border border-green-200 rounded-lg` |
+| 图标 | `CheckCircle2 h-4 w-4 text-green-600` |
+| 标题 | "任务已创建" `text-sm font-medium text-green-700` |
+| Issue 信息 | `text-xs text-muted-foreground` |
+| 查看链接 | `text-xs text-primary hover:underline`，点击打开上下文面板 Issue 详情 |
+
+**与方案确认卡片的区别**: 无需确认按钮，Issue 直接进入 `todo` 状态，样式为绿色成功态。
+
+#### 会话上下文重置标记
+
+当 Agent 判断当前话题已切换或用户表达"换个话题"意图时，自动插入会话分隔标记：
+
+```
+                    ────── ✂️ 新会话 ──────
+                    之前的消息不再影响 Agent 上下文
+```
+
+- 居中显示，`border-t border-dashed border-primary/30`
+- 图标：`Scissors` (lucide)，`text-primary`
+- 文字：`text-xs text-muted-foreground`
+- 分隔线上方为旧会话消息（保留可见，`opacity-0.6` 渐变遮罩可选）
+- 分隔线下方为新会话消息
+- Agent 后续回复仅基于分隔线以下的消息
+
+#### 命令文本样式
+
+用户消息直接发送自然语言，Agent 自动判断意图：
 
 ```
 ┌────┐
 │ 👤 │  张三                                14:35
 └────┘
-/backlog
+我们需要优化登录页面的验证逻辑，帮忙拆解一下任务
 ```
 
-- 命令文本：`bg-muted font-mono text-sm rounded px-2 py-0.5 inline`
-- 后续 Agent 回复紧随其后
+- 普通文本，无需命令前缀
+- Agent 通过 LLM 自动识别需求并生成相应回复或 Issue
 
 ### 2.3 日期分隔线
 
@@ -224,26 +267,50 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ [/backlog] [/todo] [/new]                                    │
 │ ┌──────────────────────────────────────────────────────────┐ │
-│ │ 输入消息... 使用 @提及 Agent                   [😊] [↑] │ │
+│ │ 描述你的需求... 使用 @提及 Agent               [😊] [↑] │ │
 │ └──────────────────────────────────────────────────────────┘ │
 │ 🤖 CTO · 🤖 前端 · 🤖 后端                                  │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**命令按钮行**:
-- `/backlog`: 生成方案 → Badge "生成待办"
-- `/todo`: 直接创建 → Badge "创建任务"
-- `/new`: 新会话 → Badge "新会话"
-- 仅在群组包含 Agent 成员时显示
-- 样式：`bg-muted hover:bg-accent rounded-md px-2 py-1 text-xs font-mono`
+**与基础输入的区别**:
+- 占位符改为 "描述你的需求... 使用 @提及 Agent"
+- Agent 自动识别用户意图（生成方案、创建任务、换话题等），无需显式命令
+- 支持 `@Agent` 提及
 
 **@提及自动完成**:
-- 输入 `@` 时弹出 Agent 列表
+
+输入 `@` 时在输入框上方弹出 Agent 列表 Popover：
+
+```
+┌──────────────────────────────┐
+│ 🤖 CTO         CEO 角色      │
+│ 🤖 前端Agent    Frontend 角色 │  ← 匹配高亮
+│ 🤖 后端Agent    Backend 角色  │
+└──────────────────────────────┘
+```
+
 - 使用 shadcn/ui `Command` 组件
 - 仅列出群组中的 Agent 成员
-- 选中后插入 `@AgentName ` 到输入框
+- 输入 `@前` 按名称过滤，匹配文字 `underline` 高亮
+- 选中后插入 `@前端Agent ` 到输入框
+- 键盘 `↑↓` 导航，`Enter` 选中，`Esc` 关闭
+- 仅 DM (Human+Agent) 时 @提及自动隐藏（只有一个 Agent）
+
+**@Agent 任务分配消息**:
+
+当 Agent 被 @提及时，消息气泡中高亮显示 @提及：
+
+```
+┌────┐
+│ 👤 │  张三                                14:40
+└────┘
+@前端Agent 请实现登录页面的表单验证组件
+```
+
+- `@前端Agent` 渲染为 `bg-primary/10 text-primary rounded px-1 font-medium`
+- 点击 @提及链接跳转到 Agent 详情（上下文面板 Agent Tab）
 
 **Agent 列表提示**:
 - 底部显示当前在线的 Agent 成员
@@ -251,7 +318,7 @@
 
 ### 3.3 群组无 Agent
 
-与基础输入相同，但保留 `/new` 按钮。
+与基础输入完全相同。
 
 ---
 
@@ -266,6 +333,64 @@
 - 样式：`text-xs text-muted-foreground italic` + 三个跳动的圆点动画
 - 动画：`@keyframes bounce`，每个圆点延迟 0.15s
 - 位置：消息列表底部，输入区域上方
+- 出现时机：收到 WebSocket `typing { is_typing: true }` 事件
+- 消失时机：收到 Agent 第一条消息 / 10 秒超时
+
+---
+
+## 4.5 Agent 流式响应 (Streaming)
+
+Agent 回复通过 WebSocket 以流式方式逐块到达，实现打字机效果。
+
+### 流式渲染机制
+
+```
+┌────┐
+│ 🤖 │  CTO · [CTO]                        14:41
+└────┘
+同意。建议拆分为以下子任务：
+
+1. 密码强度校验█                    ← 光标闪烁
+```
+
+**实现规范**:
+
+| 属性 | 值 |
+|------|------|
+| 数据源 | WebSocket `message` 事件，每次携带增量文本片段 |
+| 渲染方式 | 增量拼接 `content += chunk`，逐帧 `setState` |
+| 光标 | `▌` 字符，CSS `animate: blink 1s step-end infinite` |
+| 渲染频率 | 使用 `requestAnimationFrame` 节流，最多 60fps |
+| Markdown | 流式过程中实时解析渲染（使用 `react-markdown` streaming 模式） |
+| 代码块 | 流式过程中代码块先显示为行内代码，完成后切换为完整代码块 |
+| 完成标记 | 收到 `status_change` 或最后一条 `message` 事件 → 移除光标 + 最终 Markdown 渲染 |
+
+### 流式消息状态
+
+| 阶段 | 视觉表现 |
+|------|----------|
+| 等待 | 打字指示器 "🤖 CTO 正在输入..." |
+| 流式中 | 头像 + 用户名 + 增量文字 + 闪烁光标 |
+| 完成 | 头像 + 用户名 + 完整 Markdown 渲染 + 时间戳 |
+| 错误 | 头像 + 用户名 + 已有内容 + `[生成中断: 超时]` 红色标记 |
+
+### Markdown 渲染规范
+
+Agent 消息支持完整 Markdown 渲染：
+
+| 元素 | 渲染方式 |
+|------|----------|
+| **粗体** | `font-semibold` |
+| *斜体* | `italic` |
+| `行内代码` | `bg-muted rounded px-1.5 py-0.5 font-mono text-sm` |
+| 代码块 | CodeBlock 组件（带语言标签和复制按钮） |
+| 列表 | `list-disc` / `list-decimal`，缩进 `pl-4` |
+| 链接 | `text-primary hover:underline`，外部链接显示 `ExternalLink` 图标 |
+| 标题 | `text-base font-semibold`（h3 级别，不支持 h1/h2） |
+| 分隔线 | `border-t border-border my-3` |
+| 表格 | shadcn/ui `Table` 紧凑样式 |
+
+使用 `prose prose-sm max-w-none dark:prose-invert` 类包裹。
 
 ---
 
@@ -310,9 +435,9 @@
 │                                  │
 │      与 CEO 开始对话             │
 │                                  │
-│  输入消息开始聊天，或使用命令     │
-│  /backlog 生成方案               │
-│  /todo 直接创建任务              │
+│  直接描述你的需求开始对话        │
+│  Agent 会自动识别意图并响应      │
+│  也可以使用 @提及 指定 Agent     │
 │                                  │
 └──────────────────────────────────┘
 ```
