@@ -248,7 +248,7 @@
 |----------|----------|------|
 | backlog | [转为 Todo] | 批量或单个转状态 |
 | todo | [转为 Todo] [编辑] | — |
-| in_progress | [⏸ 暂停] [⏹ 停止] | 暂停冻结进程，停止终止进程 |
+| in_progress | [⏸ 暂停] [⏹ 停止] | 暂停冻结进程，停止终止进程（需确认） |
 | paused | [▶ 恢复] [⏹ 停止] | 恢复继续执行 |
 | in_review | [查看 PR →] | 打开 `pr_url` |
 | done | [查看 PR →] | 打开 `pr_url` |
@@ -270,7 +270,7 @@
 
 - 仅在 `in_progress` / `paused` / `in_review` 状态显示
 - Textarea：3 行，`placeholder="向 Agent 提供补充指令或修改要求..."`
-- 按钮调用 `POST /api/.../issues/:id/prompt`
+- 按钮调用 `POST /api/orgs/:org_id/projects/:project_id/issues/:id/prompt`
 - 发送后清空输入框，在时间线添加 `human_prompt` 事件
 
 ---

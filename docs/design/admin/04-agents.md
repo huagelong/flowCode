@@ -287,3 +287,16 @@ const agentSchema = z.object({
 | 编辑 Agent | 保存按钮 Spinner | Toast "已保存" | Toast 错误 |
 | 启用/禁用 | Switch 动画中 | Toast + 状态更新 | Toast + 回滚 |
 | 删除 Agent | 按钮变 Spinner | Toast + 返回列表 | Toast 错误 |
+
+---
+
+## 6. 空状态
+
+无 Agent 时：
+
+```
+        [🤖 图标 64px]
+      还没有 Agent
+  点击 + 创建 Agent 按钮创建
+  配置 Agent 角色和能力
+```
