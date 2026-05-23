@@ -8,7 +8,10 @@
       "Bash(cp d:/code/anserFlow/.qoder/skills/flowcode-ui/SKILL.md d:/code/anserFlow/.claude/skills/flowcode-ui.md)",
       "Bash(cp d:/code/anserFlow/.qoder/skills/flowcode-wiki/SKILL.md d:/code/anserFlow/.claude/skills/flowcode-wiki.md)",
       "Bash(mv d:/code/anserFlow/wiki d:/code/anserFlow/docs/wiki)",
-      "Bash(sed -i 's|默认使用项目根目录下的 `wiki/`|默认使用项目根目录下的 `docs/wiki/`|g' d:/code/anserFlow/.claude/skills/flowcode-wiki.md d:/code/anserFlow/.qoder/skills/flowcode-wiki/SKILL.md d:/code/anserFlow/.opencode/skills/flowcode-wiki/SKILL.md d:/code/anserFlow/.codex/skills/flowcode-wiki/SKILL.md)"
+      "Bash(sed -i 's|默认使用项目根目录下的 `wiki/`|默认使用项目根目录下的 `docs/wiki/`|g' d:/code/anserFlow/.claude/skills/flowcode-wiki.md d:/code/anserFlow/.qoder/skills/flowcode-wiki/SKILL.md d:/code/anserFlow/.opencode/skills/flowcode-wiki/SKILL.md d:/code/anserFlow/.codex/skills/flowcode-wiki/SKILL.md)",
+      "Bash(git -C d:/code/anserFlow diff -- docs/)",
+      "Bash(git -C d:/code/anserFlow status --short)",
+      "Bash(git -C d:/code/anserFlow diff --cached --stat)"
     ],
     "additionalDirectories": [
       "d:\\code\\anserFlow\\.claude",
