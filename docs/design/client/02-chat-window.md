@@ -130,6 +130,40 @@
 | 样式 | `text-xs text-muted-foreground italic bg-muted/50 rounded-full px-4 py-1` |
 | 分隔线 | 左右各 `border-t border-border flex-1` |
 
+#### Backlog 确认卡片 (backlog_ack)
+
+`/backlog` 命令生成的 Issue 需要人工确认，在聊天中以交互卡片形式展示：
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ 📋 方案已生成                                            │
+│                                                          │
+│ #42 修复登录页面验证逻辑                                  │
+│ P1 · 建议分配: 🤖 前端Agent                              │
+│                                                          │
+│ 密码强度校验规则需要更新，当前前端未做复杂度检查...       │
+│                                                          │
+│                                    [✗ 拒绝]  [✓ 确认转 Todo] │
+└──────────────────────────────────────────────────────────┘
+```
+
+| 属性 | 值 |
+|------|------|
+| 背景 | `bg-card border rounded-lg shadow-sm` |
+| 图标 | `ClipboardList h-4 w-4 text-primary` |
+| 标题 | "方案已生成" `text-sm font-medium` |
+| Issue 标题 | `text-sm font-medium` |
+| 优先级 + 分配 | `text-xs text-muted-foreground` |
+| 描述 | `text-xs text-muted-foreground line-clamp-3` |
+| 确认按钮 | `variant="default" size="sm"`，发送 `backlog_ack` WebSocket 消息 |
+| 拒绝按钮 | `variant="ghost" size="sm" text-destructive` |
+
+**交互流程**:
+1. Agent 通过 `/backlog` 生成 Issue → 聊天中显示确认卡片
+2. 用户点击"确认转 Todo" → `backlog_ack { accepted: true }` → Issue 状态变为 `todo` → 卡片更新为"已确认 ✓"
+3. 用户点击"拒绝" → `backlog_ack { accepted: false }` → Issue 保持 `backlog` → 卡片更新为"已拒绝 ✗"
+4. 确认后卡片变为只读态：`bg-muted/50`，按钮替换为状态文字
+
 #### 命令消息 (/backlog, /todo)
 
 ```
