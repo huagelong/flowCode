@@ -107,8 +107,3 @@ internal/seed/
 └── 004_example_agent.sql      # 可选：示例 Agent 配置
 ```
 
-**预置 Skill 清单**：
-
-| Skill 名称 | 用途 | anserAgent 环节 | 核心内容 |
-|-----------|------|----------------|----------|
-
