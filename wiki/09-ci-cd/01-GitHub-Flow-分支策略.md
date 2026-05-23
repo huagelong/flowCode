@@ -1,7 +1,7 @@
-> ???`docs/plan/09-ci-cd.md` ? 3 ?
-> ???[???](../README.md) -> [AnserFlow — CI/CD](README.md) -> GitHub Flow 分支策略
-> ???[???](README.md) ? [???](02-GitHub-Actions-工作流总览.md)
-> ?????[??????](README.md) ? [GitHub Actions 工作流总览](02-GitHub-Actions-工作流总览.md)
+﻿> 来源：`docs/plan/09-ci-cd.md` 第 3 行
+> 位置：[总目录](../README.md) -> [AnserFlow — CI/CD](README.md) -> GitHub Flow 分支策略
+> 相邻：[上一篇](README.md) · [下一篇](02-GitHub-Actions-工作流总览.md)
+> 相关主题：[返回文档入口](README.md) · [GitHub Actions 工作流总览](02-GitHub-Actions-工作流总览.md)
 
 ## GitHub Flow 分支策略
 

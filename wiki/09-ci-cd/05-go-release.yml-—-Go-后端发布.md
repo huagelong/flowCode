@@ -1,7 +1,7 @@
-> ???`docs/plan/09-ci-cd.md` ? 177 ?
-> ???[???](../README.md) -> [AnserFlow — CI/CD](README.md) -> go-release.yml — Go 后端发布
-> ???[???](04-sandbox-image.yml-—-Docker-沙箱镜像.md) ? [???](06-GitHub-Secrets-清单.md)
-> ?????[??????](README.md) ? [sandbox-image.yml — Docker 沙箱镜像](04-sandbox-image.yml-—-Docker-沙箱镜像.md) ? [GitHub Secrets 清单](06-GitHub-Secrets-清单.md)
+﻿> 来源：`docs/plan/09-ci-cd.md` 第 177 行
+> 位置：[总目录](../README.md) -> [AnserFlow — CI/CD](README.md) -> go-release.yml — Go 后端发布
+> 相邻：[上一篇](04-sandbox-image.yml-—-Docker-沙箱镜像.md) · [下一篇](06-GitHub-Secrets-清单.md)
+> 相关主题：[返回文档入口](README.md) · [sandbox-image.yml — Docker 沙箱镜像](04-sandbox-image.yml-—-Docker-沙箱镜像.md) · [GitHub Secrets 清单](06-GitHub-Secrets-清单.md)
 
 ## go-release.yml — Go 后端发布
 

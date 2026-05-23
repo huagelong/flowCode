@@ -1,7 +1,7 @@
-> ???`docs/plan/04-sandbox.md` ? 243 ?
-> ???[???](../../README.md) -> [AnserFlow - 沙箱 / Agent 基础设施](../README.md) -> [一、AI Agent 框架：Eino + 自研封装](README.md) -> Skill 两层继承（沙箱执行时）
-> ???[???](05-Tool-Skill-抽象.md) ? [???](07-提示词管理器（PromptManager）.md)
-> ?????[??????](README.md) ? [??????](../README.md)
+﻿> 来源：`docs/plan/04-sandbox.md` 第 243 行
+> 位置：[总目录](../../README.md) -> [AnserFlow - 沙箱 / Agent 基础设施](../README.md) -> [一、AI Agent 框架：Eino + 自研封装](README.md) -> Skill 两层继承（沙箱执行时）
+> 相邻：[上一篇](05-Tool-Skill-抽象.md) · [下一篇](07-提示词管理器（PromptManager）.md)
+> 相关主题：[返回上级章节](README.md) · [返回文档入口](../README.md)
 
 ### Skill 两层继承（沙箱执行时）
 

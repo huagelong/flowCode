@@ -1,7 +1,7 @@
-> ???`docs/plan/01-admin.md` ? 5 ?
-> ???[???](../../README.md) -> [AnserFlow - Admin Backend](../README.md) -> 完整配置文件 (config.yaml)
-> ???[???](../README.md) ? [???](../02-四、构建与部署/README.md)
-> ?????[??????](../README.md) ? [四、构建与部署](../02-四、构建与部署/README.md)
+﻿> 来源：`docs/plan/01-admin.md` 第 5 行
+> 位置：[总目录](../../README.md) -> [AnserFlow - Admin Backend](../README.md) -> 完整配置文件 (config.yaml)
+> 相邻：[上一篇](../README.md) · [下一篇](../02-四、构建与部署/README.md)
+> 相关主题：[返回文档入口](../README.md) · [四、构建与部署](../02-四、构建与部署/README.md)
 
 ## 完整配置文件 (config.yaml)
 
@@ -141,7 +141,7 @@ agent:                           # 后台 /admin/settings#agent 配置
 
 > **环境变量覆盖规则**：Viper 以 `AGENT_LLM_API_KEY` 覆盖 `agent.api_key`，`DB_PASSWORD` 覆盖 `database.password`。所有 `${VAR}` 占位符必须通过环境变量注入。
 
-## ?????
+## 子章节导航
 
 - [配置归属速查](01-配置归属速查.md)
 - [配置热更新机制](02-配置热更新机制.md)

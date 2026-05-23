@@ -1,7 +1,7 @@
-> ???`docs/plan/10-roadmap.md` ? 87 ?
-> ???[???](../../README.md) -> [AnserFlow — 开发路线图](../README.md) -> [数据库迁移策略](README.md) -> 数据库`restore` 子命令
-> ???[???](README.md) ? [???](../07-种子数据.md)
-> ?????[??????](README.md) ? [??????](../README.md)
+﻿> 来源：`docs/plan/10-roadmap.md` 第 87 行
+> 位置：[总目录](../../README.md) -> [AnserFlow — 开发路线图](../README.md) -> [数据库迁移策略](README.md) -> 数据库`restore` 子命令
+> 相邻：[上一篇](README.md) · [下一篇](../07-种子数据.md)
+> 相关主题：[返回上级章节](README.md) · [返回文档入口](../README.md)
 
 ### 数据库`restore` 子命令
 

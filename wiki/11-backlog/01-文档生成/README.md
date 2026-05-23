@@ -1,13 +1,13 @@
-> ???`docs/plan/11-backlog.md` ? 5 ?
-> ???[???](../../README.md) -> [AnserFlow — 远期 Backlog（Phase 2+）](../README.md) -> 文档生成
-> ???[???](../README.md) ? [???](../02-任务计划/README.md)
-> ?????[??????](../README.md) ? [任务计划](../02-任务计划/README.md)
+﻿> 来源：`docs/plan/11-backlog.md` 第 5 行
+> 位置：[总目录](../../README.md) -> [AnserFlow — 远期 Backlog（Phase 2+）](../README.md) -> 文档生成
+> 相邻：[上一篇](../README.md) · [下一篇](../02-任务计划/README.md)
+> 相关主题：[返回文档入口](../README.md) · [任务计划](../02-任务计划/README.md)
 
 ## 文档生成
 
 当前项目文档依赖手工编写。以下补全**代码 → 文档**的反向生成能力。
 
-## ?????
+## 子章节导航
 
 - [代码 → 文档自动生成](01-代码-→-文档自动生成.md)
 - [文档质量门禁](02-文档质量门禁.md)

@@ -1,7 +1,7 @@
-> ???`docs/plan/04b-sandbox-runtime.md` ? 178 ?
-> ???[???](../../README.md) -> [AnserFlow - 沙箱执行运行时](../README.md) -> [二、沙箱镜像与执行细节](README.md) -> Dockerfile
-> ???[???](README.md) ? [???](02-entrypoint.sh.md)
-> ?????[??????](README.md) ? [??????](../README.md)
+﻿> 来源：`docs/plan/04b-sandbox-runtime.md` 第 178 行
+> 位置：[总目录](../../README.md) -> [AnserFlow - 沙箱执行运行时](../README.md) -> [二、沙箱镜像与执行细节](README.md) -> Dockerfile
+> 相邻：[上一篇](README.md) · [下一篇](02-entrypoint.sh.md)
+> 相关主题：[返回上级章节](README.md) · [返回文档入口](../README.md)
 
 ### Dockerfile
 

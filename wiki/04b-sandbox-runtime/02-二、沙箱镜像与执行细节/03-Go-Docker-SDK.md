@@ -1,7 +1,7 @@
-> ???`docs/plan/04b-sandbox-runtime.md` ? 252 ?
-> ???[???](../../README.md) -> [AnserFlow - 沙箱执行运行时](../README.md) -> [二、沙箱镜像与执行细节](README.md) -> Go Docker SDK
-> ???[???](02-entrypoint.sh.md) ? [???](04-运行时数据目录.md)
-> ?????[??????](README.md) ? [??????](../README.md)
+﻿> 来源：`docs/plan/04b-sandbox-runtime.md` 第 252 行
+> 位置：[总目录](../../README.md) -> [AnserFlow - 沙箱执行运行时](../README.md) -> [二、沙箱镜像与执行细节](README.md) -> Go Docker SDK
+> 相邻：[上一篇](02-entrypoint.sh.md) · [下一篇](04-运行时数据目录.md)
+> 相关主题：[返回上级章节](README.md) · [返回文档入口](../README.md)
 
 ### Go Docker SDK
 

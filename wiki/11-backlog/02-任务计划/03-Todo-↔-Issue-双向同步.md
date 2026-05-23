@@ -1,7 +1,7 @@
-> ???`docs/plan/11-backlog.md` ? 115 ?
-> ???[???](../../README.md) -> [AnserFlow — 远期 Backlog（Phase 2+）](../README.md) -> [任务计划](README.md) -> Todo ↔ Issue 双向同步
-> ???[???](02-任务依赖图可视化.md) ? [???](04-执行策略引擎.md)
-> ?????[??????](README.md) ? [??????](../README.md)
+﻿> 来源：`docs/plan/11-backlog.md` 第 115 行
+> 位置：[总目录](../../README.md) -> [AnserFlow — 远期 Backlog（Phase 2+）](../README.md) -> [任务计划](README.md) -> Todo ↔ Issue 双向同步
+> 相邻：[上一篇](02-任务依赖图可视化.md) · [下一篇](04-执行策略引擎.md)
+> 相关主题：[返回上级章节](README.md) · [返回文档入口](../README.md)
 
 ### Todo ↔ Issue 双向同步
 

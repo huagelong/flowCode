@@ -1,13 +1,13 @@
-> ???`docs/plan/07-architecture.md` ? 1 ?
-> ???[???](../README.md) -> AnserFlow — 系统架构概述
-> ???[???](../06-agent/README.md) ? [???](../08-deployment/README.md)
-> ?????[??????](../06-agent/README.md) ? [??????](../08-deployment/README.md)
+﻿> 来源：`docs/plan/07-architecture.md` 第 1 行
+> 位置：[总目录](../README.md) -> AnserFlow — 系统架构概述
+> 相邻：[上一篇](../06-agent/README.md) · [下一篇](../08-deployment/README.md)
+> 相关主题：[上一份源文档](../06-agent/README.md) · [下一份源文档](../08-deployment/README.md)
 
 # AnserFlow — 系统架构概述
 
 > 汇集系统愿景、技术栈选型、当前约束范围与关键风险。
 
-## ????
+## 章节导航
 
 - [一、系统愿景](01-一、系统愿景.md)
 - [当前阶段闭环约束](02-当前阶段闭环约束.md)

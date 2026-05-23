@@ -1,7 +1,7 @@
-> ???`docs/plan/03-client.md` ? 227 ?
-> ???[???](../README.md) -> [AnserFlow - Client / Frontend](README.md) -> 客户端（Web SPA）
-> ???[???](02-国际化（i18n）.md) ? ?????
-> ?????[??????](README.md) ? [国际化（i18n）](02-国际化（i18n）.md)
+﻿> 来源：`docs/plan/03-client.md` 第 227 行
+> 位置：[总目录](../README.md) -> [AnserFlow - Client / Frontend](README.md) -> 客户端（Web SPA）
+> 相邻：[上一篇](02-国际化（i18n）.md) · 下一篇：无
+> 相关主题：[返回文档入口](README.md) · [国际化（i18n）](02-国际化（i18n）.md)
 
 ### 客户端（Web SPA）
 

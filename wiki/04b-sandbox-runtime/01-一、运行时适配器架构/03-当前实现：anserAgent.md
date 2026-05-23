@@ -1,7 +1,7 @@
-> ???`docs/plan/04b-sandbox-runtime.md` ? 65 ?
-> ???[???](../../README.md) -> [AnserFlow - 沙箱执行运行时](../README.md) -> [一、运行时适配器架构](README.md) -> 当前实现：anserAgent
-> ???[???](02-接口定义.md) ? [???](04-RuntimeManager-—-简化管理器.md)
-> ?????[??????](README.md) ? [??????](../README.md)
+﻿> 来源：`docs/plan/04b-sandbox-runtime.md` 第 65 行
+> 位置：[总目录](../../README.md) -> [AnserFlow - 沙箱执行运行时](../README.md) -> [一、运行时适配器架构](README.md) -> 当前实现：anserAgent
+> 相邻：[上一篇](02-接口定义.md) · [下一篇](04-RuntimeManager-—-简化管理器.md)
+> 相关主题：[返回上级章节](README.md) · [返回文档入口](../README.md)
 
 ### 当前实现：anserAgent
 

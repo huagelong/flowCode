@@ -1,7 +1,7 @@
-> ???`docs/plan/04-sandbox.md` ? 173 ?
-> ???[???](../../README.md) -> [AnserFlow - 沙箱 / Agent 基础设施](../README.md) -> [一、AI Agent 框架：Eino + 自研封装](README.md) -> Agent 运行时配置
-> ???[???](02-Eino-初始化与配置.md) ? [???](04-ChatModel-调用示例.md)
-> ?????[??????](README.md) ? [??????](../README.md)
+﻿> 来源：`docs/plan/04-sandbox.md` 第 173 行
+> 位置：[总目录](../../README.md) -> [AnserFlow - 沙箱 / Agent 基础设施](../README.md) -> [一、AI Agent 框架：Eino + 自研封装](README.md) -> Agent 运行时配置
+> 相邻：[上一篇](02-Eino-初始化与配置.md) · [下一篇](04-ChatModel-调用示例.md)
+> 相关主题：[返回上级章节](README.md) · [返回文档入口](../README.md)
 
 ### Agent 运行时配置
 

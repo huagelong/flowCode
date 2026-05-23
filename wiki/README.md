@@ -1,6 +1,6 @@
-# AnserFlow Wiki
+﻿# AnserFlow Wiki
 
-## ????
+## 快速入口
 
 - [AnserFlow - Admin Backend](01-admin/README.md)
 - [AnserFlow - API / Backend](02-api/README.md)
@@ -15,30 +15,30 @@
 - [AnserFlow — 远期 Backlog（Phase 2+）](11-backlog/README.md)
 - [AnserFlow 文档索引](plan-index/README.md)
 
-## ??????
+## 推荐检索路径
 
-- ?????[????](07-architecture/README.md) -> [???????](01-admin/README.md) -> [API ?????](02-api/README.md) -> [?????](03-client/README.md)
-- ?????[??????](04-sandbox/README.md) -> [???????](04b-sandbox-runtime/README.md) -> [?????](06-agent/README.md) -> [CI/CD](09-ci-cd/README.md) -> [????](08-deployment/README.md)
-- ?????[????](plan-index/README.md) -> [?????](10-roadmap/README.md) -> [?? Backlog](11-backlog/README.md)
+- 系统全貌：[AnserFlow — 系统架构概述](07-architecture/README.md) -> [AnserFlow - Admin Backend](01-admin/README.md) -> [AnserFlow - API / Backend](02-api/README.md) -> [AnserFlow - Client / Frontend](03-client/README.md)
+- 执行链路：[AnserFlow - 沙箱 / Agent 基础设施](04-sandbox/README.md) -> [AnserFlow - 沙箱执行运行时](04b-sandbox-runtime/README.md) -> [AnserFlow - anserAgent 智能体系统](06-agent/README.md) -> [AnserFlow — CI/CD](09-ci-cd/README.md) -> [AnserFlow - 部署指南](08-deployment/README.md)
+- 交付规划：[AnserFlow 文档索引](plan-index/README.md) -> [AnserFlow — 开发路线图](10-roadmap/README.md) -> [AnserFlow — 远期 Backlog（Phase 2+）](11-backlog/README.md)
 
-## ????
+## 关系图谱
 
 ```mermaid
 graph TD
-    A[plan ??] --> B[??????]
+    A[plan 索引] --> B[系统架构概述]
     B --> C[Admin Backend]
     B --> D[API / Backend]
     B --> E[Client / Frontend]
-    B --> F[?? / Agent ????]
-    F --> G[???????]
-    F --> H[anserAgent ?????]
+    B --> F[沙箱 / Agent 基础设施]
+    F --> G[沙箱执行运行时]
+    F --> H[anserAgent 智能体系统]
     H --> I[CI/CD]
-    I --> J[????]
-    B --> K[?????]
-    K --> L[?? Backlog]
+    I --> J[部署指南]
+    B --> K[开发路线图]
+    K --> L[远期 Backlog]
 ```
 
-## ?????
+## 细分文档树
 
 - [AnserFlow - Admin Backend](01-admin/README.md)
 - AnserFlow - Admin Backend / [完整配置文件 (config.yaml)](01-admin/01-完整配置文件-config.yaml/README.md)
@@ -82,16 +82,29 @@ graph TD
 - AnserFlow - 沙箱 / Agent 基础设施 / 一、AI Agent 框架：Eino + 自研封装 / [Tool / Skill 抽象](04-sandbox/01-一、AI-Agent-框架：Eino-+-自研封装/05-Tool-Skill-抽象.md)
 - AnserFlow - 沙箱 / Agent 基础设施 / 一、AI Agent 框架：Eino + 自研封装 / [Skill 两层继承（沙箱执行时）](04-sandbox/01-一、AI-Agent-框架：Eino-+-自研封装/06-Skill-两层继承（沙箱执行时）.md)
 - AnserFlow - 沙箱 / Agent 基础设施 / 一、AI Agent 框架：Eino + 自研封装 / [提示词管理器（PromptManager）](04-sandbox/01-一、AI-Agent-框架：Eino-+-自研封装/07-提示词管理器（PromptManager）.md)
-- AnserFlow - 沙箱 / Agent 基础设施 / [触发条件](04-sandbox/02-触发条件.md)
-- AnserFlow - 沙箱 / Agent 基础设施 / [创建规则](04-sandbox/03-创建规则/README.md)
-- AnserFlow - 沙箱 / Agent 基础设施 / 创建规则 / [2.3 Go Docker SDK](04-sandbox/03-创建规则/01-2.3-Go-Docker-SDK.md)
-- AnserFlow - 沙箱 / Agent 基础设施 / 创建规则 / [2.3.1 运行时数据目录 — 三层架构](04-sandbox/03-创建规则/02-2.3.1-运行时数据目录-—-三层架构.md)
-- AnserFlow - 沙箱 / Agent 基础设施 / 创建规则 / [2.4 GitHub SDK 集成](04-sandbox/03-创建规则/03-2.4-GitHub-SDK-集成.md)
-- AnserFlow - 沙箱 / Agent 基础设施 / [三、Skills 技能系统](04-sandbox/04-三、Skills-技能系统/README.md)
-- AnserFlow - 沙箱 / Agent 基础设施 / 三、Skills 技能系统 / [3.1 两种导入方式](04-sandbox/04-三、Skills-技能系统/01-3.1-两种导入方式.md)
-- AnserFlow - 沙箱 / Agent 基础设施 / 三、Skills 技能系统 / [3.2 ZIP 包格式](04-sandbox/04-三、Skills-技能系统/02-3.2-ZIP-包格式.md)
-- AnserFlow - 沙箱 / Agent 基础设施 / 三、Skills 技能系统 / [3.3 ZIP 导入完整流程](04-sandbox/04-三、Skills-技能系统/03-3.3-ZIP-导入完整流程.md)
-- AnserFlow - 沙箱 / Agent 基础设施 / 三、Skills 技能系统 / [3.4 启用控制](04-sandbox/04-三、Skills-技能系统/04-3.4-启用控制.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 一、AI Agent 框架：Eino + 自研封装 / [IssueStatusManager — Issue 状态机管理器](04-sandbox/01-一、AI-Agent-框架：Eino-+-自研封装/08-IssueStatusManager-—-Issue-状态机管理器.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 一、AI Agent 框架：Eino + 自研封装 / [NotificationChannelManager — 通知渠道管理器](04-sandbox/01-一、AI-Agent-框架：Eino-+-自研封装/09-NotificationChannelManager-—-通知渠道管理器.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 一、AI Agent 框架：Eino + 自研封装 / [GitManager — Git 管理器](04-sandbox/01-一、AI-Agent-框架：Eino-+-自研封装/10-GitManager-—-Git-管理器.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 一、AI Agent 框架：Eino + 自研封装 / [TokenManager — Token 配额管理器](04-sandbox/01-一、AI-Agent-框架：Eino-+-自研封装/11-TokenManager-—-Token-配额管理器.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 一、AI Agent 框架：Eino + 自研封装 / [anserAgent Tool 系统（Skill 与系统通信）](04-sandbox/01-一、AI-Agent-框架：Eino-+-自研封装/12-anserAgent-Tool-系统（Skill-与系统通信）.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 一、AI Agent 框架：Eino + 自研封装 / [`/backlog` 与 `/todo` 指令识别](04-sandbox/01-一、AI-Agent-框架：Eino-+-自研封装/13-backlog-与-todo-指令识别.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 一、AI Agent 框架：Eino + 自研封装 / [`/new` 指令 — 会话上下文隔离](04-sandbox/01-一、AI-Agent-框架：Eino-+-自研封装/14-new-指令-—-会话上下文隔离.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 一、AI Agent 框架：Eino + 自研封装 / [@Agent 任务布置](04-sandbox/01-一、AI-Agent-框架：Eino-+-自研封装/15-@Agent-任务布置.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 一、AI Agent 框架：Eino + 自研封装 / [Token 用量与成本追踪](04-sandbox/01-一、AI-Agent-框架：Eino-+-自研封装/16-Token-用量与成本追踪.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / [二、Docker 沙箱方案](04-sandbox/02-二、Docker-沙箱方案/README.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 二、Docker 沙箱方案 / [2.0 容器与代码隔离策略](04-sandbox/02-二、Docker-沙箱方案/01-2.0-容器与代码隔离策略.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 二、Docker 沙箱方案 / [2.1 执行流程](04-sandbox/02-二、Docker-沙箱方案/02-2.1-执行流程.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 二、Docker 沙箱方案 / [2.1.1 沙箱 ↔ 系统消息互通闭环](04-sandbox/02-二、Docker-沙箱方案/03-2.1.1-沙箱-↔-系统消息互通闭环.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 二、Docker 沙箱方案 / [2.1.2 执行控制（暂停 / 恢复 / 停止）](04-sandbox/02-二、Docker-沙箱方案/04-2.1.2-执行控制（暂停-恢复-停止）.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 二、Docker 沙箱方案 / [2.2 安全策略](04-sandbox/02-二、Docker-沙箱方案/05-2.2-安全策略.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 二、Docker 沙箱方案 / [2.2.1 数据持久化保障](04-sandbox/02-二、Docker-沙箱方案/06-2.2.1-数据持久化保障.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 二、Docker 沙箱方案 / [2.3.1 运行时数据目录 — 三层架构](04-sandbox/02-二、Docker-沙箱方案/07-2.3.1-运行时数据目录-—-三层架构.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 二、Docker 沙箱方案 / [2.4 GitHub SDK 集成](04-sandbox/02-二、Docker-沙箱方案/08-2.4-GitHub-SDK-集成.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / [三、Skills 技能系统](04-sandbox/03-三、Skills-技能系统/README.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 三、Skills 技能系统 / [3.1 两种导入方式](04-sandbox/03-三、Skills-技能系统/01-3.1-两种导入方式.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 三、Skills 技能系统 / [3.2 ZIP 包格式](04-sandbox/03-三、Skills-技能系统/02-3.2-ZIP-包格式.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 三、Skills 技能系统 / [3.3 ZIP 导入完整流程](04-sandbox/03-三、Skills-技能系统/03-3.3-ZIP-导入完整流程.md)
+- AnserFlow - 沙箱 / Agent 基础设施 / 三、Skills 技能系统 / [3.4 启用控制](04-sandbox/03-三、Skills-技能系统/04-3.4-启用控制.md)
 - [AnserFlow - 沙箱执行运行时](04b-sandbox-runtime/README.md)
 - AnserFlow - 沙箱执行运行时 / [一、运行时适配器架构](04b-sandbox-runtime/01-一、运行时适配器架构/README.md)
 - AnserFlow - 沙箱执行运行时 / 一、运行时适配器架构 / [设计原则](04b-sandbox-runtime/01-一、运行时适配器架构/01-设计原则.md)
@@ -123,23 +136,37 @@ graph TD
 - AnserFlow - anserAgent 智能体系统 / 五、中断与恢复 / [5.3 典型流程](06-agent/05-五、中断与恢复/03-5.3-典型流程.md)
 - AnserFlow - anserAgent 智能体系统 / [六、Human-in-the-Loop](06-agent/06-六、Human-in-the-Loop/README.md)
 - AnserFlow - anserAgent 智能体系统 / 六、Human-in-the-Loop / [6.1 模式总览](06-agent/06-六、Human-in-the-Loop/01-6.1-模式总览.md)
-- AnserFlow - anserAgent 智能体系统 / 六、Human-in-the-Loop / [6.2 [Phase 2] 群聊审批模式（合并审批）](06-agent/06-六、Human-in-the-Loop/02-6.2-Phase-2-群聊审批模式（合并审批）.md)
-- AnserFlow - anserAgent 智能体系统 / [行为约束](06-agent/07-行为约束.md)
-- AnserFlow - anserAgent 智能体系统 / [沟通风格](06-agent/08-沟通风格.md)
-- AnserFlow - anserAgent 智能体系统 / [安全边界](06-agent/09-安全边界.md)
-- AnserFlow - anserAgent 智能体系统 / [快速路由](06-agent/10-快速路由.md)
-- AnserFlow - anserAgent 智能体系统 / [检索策略](06-agent/11-检索策略.md)
-- AnserFlow - anserAgent 智能体系统 / [后端](06-agent/12-后端.md)
-- AnserFlow - anserAgent 智能体系统 / [前端](06-agent/13-前端.md)
-- AnserFlow - anserAgent 智能体系统 / [沙箱](06-agent/14-沙箱.md)
-- AnserFlow - anserAgent 智能体系统 / [触发条件](06-agent/15-触发条件.md)
-- AnserFlow - anserAgent 智能体系统 / [标准流程](06-agent/16-标准流程.md)
-- AnserFlow - anserAgent 智能体系统 / [已知陷阱](06-agent/17-已知陷阱.md)
-- AnserFlow - anserAgent 智能体系统 / [改进历史](06-agent/18-改进历史.md)
-- AnserFlow - anserAgent 智能体系统 / [任务摘要](06-agent/19-任务摘要.md)
-- AnserFlow - anserAgent 智能体系统 / [关键决策](06-agent/20-关键决策.md)
-- AnserFlow - anserAgent 智能体系统 / [踩过的坑](06-agent/21-踩过的坑.md)
-- AnserFlow - anserAgent 智能体系统 / [经验贡献](06-agent/22-经验贡献.md)
+- AnserFlow - anserAgent 智能体系统 / 六、Human-in-the-Loop / [6.2 \[Phase 2\] 群聊审批模式（合并审批）](06-agent/06-六、Human-in-the-Loop/02-6.2-Phase-2-群聊审批模式（合并审批）.md)
+- AnserFlow - anserAgent 智能体系统 / [七、Runner 执行容器](06-agent/07-七、Runner-执行容器/README.md)
+- AnserFlow - anserAgent 智能体系统 / 七、Runner 执行容器 / [7.1 Runner 职责](06-agent/07-七、Runner-执行容器/01-7.1-Runner-职责.md)
+- AnserFlow - anserAgent 智能体系统 / 七、Runner 执行容器 / [7.2 Runner 工作流程](06-agent/07-七、Runner-执行容器/02-7.2-Runner-工作流程.md)
+- AnserFlow - anserAgent 智能体系统 / 七、Runner 执行容器 / [7.3 与现有模块的关系](06-agent/07-七、Runner-执行容器/03-7.3-与现有模块的关系.md)
+- AnserFlow - anserAgent 智能体系统 / [八、五层记忆系统](06-agent/08-八、五层记忆系统/README.md)
+- AnserFlow - anserAgent 智能体系统 / 八、五层记忆系统 / [8.1 分层架构](06-agent/08-八、五层记忆系统/01-8.1-分层架构.md)
+- AnserFlow - anserAgent 智能体系统 / 八、五层记忆系统 / [8.2 项目级记忆目录](06-agent/08-八、五层记忆系统/02-8.2-项目级记忆目录.md)
+- AnserFlow - anserAgent 智能体系统 / 八、五层记忆系统 / [8.3 各层内容示例](06-agent/08-八、五层记忆系统/03-8.3-各层内容示例.md)
+- AnserFlow - anserAgent 智能体系统 / 八、五层记忆系统 / [8.4 核心接口](06-agent/08-八、五层记忆系统/04-8.4-核心接口.md)
+- AnserFlow - anserAgent 智能体系统 / 八、五层记忆系统 / [8.5 记忆读写时机](06-agent/08-八、五层记忆系统/05-8.5-记忆读写时机.md)
+- AnserFlow - anserAgent 智能体系统 / 八、五层记忆系统 / [8.6 更新频率与权限](06-agent/08-八、五层记忆系统/06-8.6-更新频率与权限.md)
+- AnserFlow - anserAgent 智能体系统 / [九、Skills 自改进引擎](06-agent/09-九、Skills-自改进引擎/README.md)
+- AnserFlow - anserAgent 智能体系统 / 九、Skills 自改进引擎 / [9.1 Skill 生命周期](06-agent/09-九、Skills-自改进引擎/01-9.1-Skill-生命周期.md)
+- AnserFlow - anserAgent 智能体系统 / 九、Skills 自改进引擎 / [9.2 Skill 自动生成规则](06-agent/09-九、Skills-自改进引擎/02-9.2-Skill-自动生成规则.md)
+- AnserFlow - anserAgent 智能体系统 / 九、Skills 自改进引擎 / [9.3 Skill 结晶化（借鉴 GenericAgent）](06-agent/09-九、Skills-自改进引擎/03-9.3-Skill-结晶化（借鉴-GenericAgent）.md)
+- AnserFlow - anserAgent 智能体系统 / 九、Skills 自改进引擎 / [9.4 Skill 自改进](06-agent/09-九、Skills-自改进引擎/04-9.4-Skill-自改进.md)
+- AnserFlow - anserAgent 智能体系统 / 九、Skills 自改进引擎 / [9.5 Skill 过时检测](06-agent/09-九、Skills-自改进引擎/05-9.5-Skill-过时检测.md)
+- AnserFlow - anserAgent 智能体系统 / [十、Agent 主循环](06-agent/10-十、Agent-主循环/README.md)
+- AnserFlow - anserAgent 智能体系统 / 十、Agent 主循环 / [10.1 Agent 统一接口](06-agent/10-十、Agent-主循环/01-10.1-Agent-统一接口.md)
+- AnserFlow - anserAgent 智能体系统 / 十、Agent 主循环 / [10.2 anserAgent 实现](06-agent/10-十、Agent-主循环/02-10.2-anserAgent-实现.md)
+- AnserFlow - anserAgent 智能体系统 / 十、Agent 主循环 / [10.3 上下文构建（信息密度最大化）](06-agent/10-十、Agent-主循环/03-10.3-上下文构建（信息密度最大化）.md)
+- AnserFlow - anserAgent 智能体系统 / 十、Agent 主循环 / [10.4 调度编排模式（基于 Runner）](06-agent/10-十、Agent-主循环/04-10.4-调度编排模式（基于-Runner）.md)
+- AnserFlow - anserAgent 智能体系统 / 十、Agent 主循环 / [10.5 沙箱执行编排模式（基于 Runner + 中断）](06-agent/10-十、Agent-主循环/05-10.5-沙箱执行编排模式（基于-Runner-+-中断）.md)
+- AnserFlow - anserAgent 智能体系统 / [十一、与其他模块的集成](06-agent/11-十一、与其他模块的集成.md)
+- AnserFlow - anserAgent 智能体系统 / [十二、数据库表](06-agent/12-十二、数据库表/README.md)
+- AnserFlow - anserAgent 智能体系统 / 十二、数据库表 / [12.1 agent_checkpoints](06-agent/12-十二、数据库表/01-12.1-agent_checkpoints.md)
+- AnserFlow - anserAgent 智能体系统 / 十二、数据库表 / [12.2 agent_memories](06-agent/12-十二、数据库表/02-12.2-agent_memories.md)
+- AnserFlow - anserAgent 智能体系统 / 十二、数据库表 / [12.3 skill_generation_logs](06-agent/12-十二、数据库表/03-12.3-skill_generation_logs.md)
+- AnserFlow - anserAgent 智能体系统 / [十三、从 eino-* Skills 到 anserAgent 的迁移映射](06-agent/13-十三、从-eino-Skills-到-anserAgent-的迁移映射.md)
+- AnserFlow - anserAgent 智能体系统 / [十四、当前阶段范围](06-agent/14-十四、当前阶段范围.md)
 - [AnserFlow — 系统架构概述](07-architecture/README.md)
 - AnserFlow — 系统架构概述 / [一、系统愿景](07-architecture/01-一、系统愿景.md)
 - AnserFlow — 系统架构概述 / [当前阶段闭环约束](07-architecture/02-当前阶段闭环约束.md)
@@ -201,8 +228,8 @@ graph TD
 - AnserFlow 文档索引 / [阅读顺序建议](plan-index/02-阅读顺序建议.md)
 - AnserFlow 文档索引 / [引用说明](plan-index/03-引用说明.md)
 
-## ????
+## 引用资源
 
-- ??????`docs/`
-- ????? `docs/` ? Markdown ??
-- ??? DDL ?????`docs/ddl.sql`
+- 源文档目录：`docs/`
+- 本次仅拆分 `docs/` 下 Markdown 文档
+- 数据库 DDL 原始文件：`docs/ddl.sql`
