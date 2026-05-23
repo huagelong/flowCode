@@ -186,6 +186,8 @@ CREATE TABLE issues (
     INDEX idx_project_status_created (project_id, status, created_at),
     INDEX idx_assignee_status (created_by, status)
 );
+
+CREATE TABLE issue_assignee (
     id BIGINT PRIMARY KEY AUTO_INCREMENT,
     issue_id BIGINT NOT NULL,
     user_id BIGINT NULL,
