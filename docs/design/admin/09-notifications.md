@@ -46,6 +46,7 @@
 |------|---------------|------|
 | issue_assigned | `UserPlus` | Issue 分配给你 |
 | issue_status_changed | `RefreshCw` | Issue 状态变更 |
+| plan_generated | `ClipboardList` | Agent 生成方案，需你确认 |
 | agent_completed | `Bot` + `CheckCircle2` | Agent 执行完成 |
 | agent_failed | `Bot` + `XCircle` | Agent 执行失败 |
 | mention | `AtSign` | @提及 |
@@ -58,7 +59,8 @@
 |------|----------|
 | 全部 | 无筛选 |
 | 未读 | `is_read=false` |
-| Issue | `type` 包含 `issue` |
+| 待确认 | `type=plan_generated` 且未确认 |
+| Issue | `type` 包含 `issue` 或 `plan_generated` |
 | Agent | `type` 包含 `agent` |
 | 邀请 | `type=invite` |
 | 提及 | `type=mention` |
@@ -95,10 +97,13 @@
 
 ```
 ┌──────────────────────────────────┐
-│ 通知 (3 条未读)       [全部已读] │
+│ 通知 (4 条未读)       [全部已读] │
+│ ──────────────────────────────── │
+│ ● 📋 CTO 生成了方案 #42，待确认 │
+│   2 分钟前                       │
 │ ──────────────────────────────── │
 │ ● 🤖 前端Agent 完成 Issue #42   │
-│   2 分钟前                       │
+│   5 分钟前                       │
 │ ──────────────────────────────── │
 │ ● 张三 @提及了你                 │
 │   1 小时前                       │
@@ -138,6 +143,13 @@ toast.success("Agent 完成了任务", {
   description: "前端Agent 完成了 Issue #42: 修复登录Bug",
   action: { label: "查看", onClick: () => navigate("/admin/projects/1/issues/42") },
   duration: 5000,
+});
+
+// 方案待确认通知
+toast.info("方案待确认", {
+  description: "CTO 在讨论中生成了方案 #42: 修复登录页面验证逻辑",
+  action: { label: "去确认", onClick: () => navigate("/admin/groups/5") },
+  duration: 0, // 不自动关闭，直到用户操作
 });
 
 // Agent 失败通知
