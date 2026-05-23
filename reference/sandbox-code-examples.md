@@ -56,7 +56,7 @@ func NewAgent(cfg AgentConfig) (*Agent, error) {
   "max_tokens": 8192,
   "temperature": 0.7,
   "tools": ["git_ops", "file_editor", "shell_executor"],
-  "skills": ["anser-coder", "react-best-practices"],
+  "skills": ["react-best-practices"],
   "memory_layers": ["L0", "L1", "L2", "L3"]
 }
 ```

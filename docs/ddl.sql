@@ -175,7 +175,6 @@ CREATE TABLE issues (
     source_group_id BIGINT,
     source_message_id BIGINT,
     pr_url VARCHAR(512),
-    sandbox_container_id VARCHAR(64),
     created_by BIGINT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -305,6 +304,67 @@ CREATE TABLE todos (
     FOREIGN KEY (assigned_user_id) REFERENCES users(id),
     FOREIGN KEY (linked_issue_id) REFERENCES issues(id),
     FOREIGN KEY (created_by) REFERENCES users(id)
+);
+
+-- ============================================================================
+-- Agent 执行与记忆（对应 06-agent / 五层记忆 / 中断恢复 / Skill 自改进）
+-- ============================================================================
+
+CREATE TABLE agent_checkpoints (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    checkpoint_id VARCHAR(128) NOT NULL UNIQUE,
+    agent_id BIGINT NOT NULL,
+    project_id BIGINT NOT NULL,
+    org_id BIGINT NOT NULL,
+    agent_path JSON NOT NULL,
+    interrupt_id VARCHAR(128),
+    interrupt_info TEXT,
+    state_data MEDIUMTEXT NOT NULL,
+    status ENUM('running','interrupted','resumed','completed','failed') DEFAULT 'running',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_agent_project (agent_id, project_id),
+    INDEX idx_status (status),
+    FOREIGN KEY (agent_id) REFERENCES agents(id),
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+
+CREATE TABLE agent_memories (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    agent_id BIGINT NOT NULL,
+    project_id BIGINT NOT NULL,
+    org_id BIGINT NOT NULL,
+    layer ENUM('L0','L1','L2','L3','L4') NOT NULL,
+    title VARCHAR(256),
+    content TEXT NOT NULL,
+    file_path VARCHAR(512),
+    tags JSON,
+    source ENUM('auto_summary','skill_created','manual','execution') NOT NULL,
+    session_id VARCHAR(64),
+    issue_id BIGINT,
+    relevance_score FLOAT DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_agent_project (agent_id, project_id),
+    INDEX idx_project_layer (project_id, layer),
+    FOREIGN KEY (agent_id) REFERENCES agents(id),
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+
+CREATE TABLE skill_generation_logs (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    agent_id BIGINT NOT NULL,
+    project_id BIGINT NOT NULL,
+    rule_id VARCHAR(16) NOT NULL,
+    trigger_type ENUM('on_complex_task','on_repeated_task','on_failure','on_manual') NOT NULL,
+    strategy ENUM('extract','failure_learning','best_practice') NOT NULL,
+    source_issue_id BIGINT,
+    skill_name VARCHAR(128),
+    skill_version INT DEFAULT 1,
+    quality_score FLOAT,
+    status ENUM('generated','approved','rejected','improved') DEFAULT 'generated',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (agent_id) REFERENCES agents(id),
+    FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
 -- ============================================================================

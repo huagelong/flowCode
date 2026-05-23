@@ -20,7 +20,7 @@ docs/
     └── 11-backlog.md              ← 远期 backlog 规划
 ```
 
-> 说明：`05` 编号当前预留，暂无对应文档；`04b` 作为 `04-sandbox.md` 的运行时补充文档存在。
+> 说明：`05` 编号预留，计划用于「通知与消息系统」模块（WebSocket Push、邮件通知、浏览器 Notification API、站内消息中心），当前内容散见于 `02-api` 和 `03-client`。`04b` 作为 `04-sandbox.md` 的运行时补充文档存在，覆盖 Docker 镜像构建、entrypoint、Go Docker SDK 和 RuntimeAdapter 接口实现。
 
 ## 阅读顺序建议
 
