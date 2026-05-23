@@ -81,6 +81,58 @@
 - `text-xs text-muted-foreground italic`
 - 图标：`Info text-muted-foreground`
 
+### 1.4 可展开详情
+
+点击 `agent_log` 时间线条目可展开内联详情，展示 Agent 执行的结构化成果：
+
+```
+12:08 🤖 ✅ Running tests: 4 passed, 0 failed
+       ┌────────────────────────────────────┐
+       │ ✅ 测试通过                   4/4   │
+       │ ✓ LoginForm > validates email     │
+       │ ✓ LoginForm > validates password  │
+       │ ✓ LoginForm > submits on valid    │
+       │ ✓ LoginForm > shows error on...   │
+       └────────────────────────────────────┘
+12:05 🤖 📄 Generated file: src/login.tsx
+       ┌────────────────────────────────────┐
+       │ 📄 生成了 2 个文件                  │
+       │ ✅ src/components/LoginForm.tsx     │
+       │ ✅ src/hooks/useAuth.ts            │
+       └────────────────────────────────────┘
+12:02 🤖 📝 Starting: 读取 Issue 描述...
+```
+
+**展开规则**:
+
+| action | 展开后内容 | 组件 |
+|--------|-----------|------|
+| `generate` | 文件列表摘要（紧凑版，文件项点击可展开 DiffViewer） | AgentOutputCard (文件生成) |
+| `commit` | Commit 摘要（哈希 + 分支 + 文件数） | AgentOutputCard (Commit) |
+| `create_pr` | PR 摘要（标题 + source→target） | AgentOutputCard (PR 创建) |
+| `test_pass` | 通过用例列表（紧凑版） | AgentOutputCard (测试通过) |
+| `test_fail` | 失败详情（紧凑版 + 展开 Expected/Received） | AgentOutputCard (测试失败) |
+| `error` | 错误信息 + 重试按钮 | AgentOutputCard (错误) |
+| `fix` | 修复文件列表摘要 | AgentOutputCard (文件生成) |
+| 其他 | 不展开 | — |
+
+**紧凑版差异**（相比 Admin 完整版）:
+
+| 属性 | Admin 完整版 | Client 紧凑版 |
+|------|-------------|---------------|
+| 字体 | `text-sm` | `text-xs` |
+| 图标 | `h-4 w-4` | `h-3.5 w-3.5` |
+| DiffViewer | 完整内联 | 文件项点击后弹出 Sheet 展示 |
+| 间距 | `p-3` | `p-2` |
+| 最大高度 | 无限制 | `max-h-[240px] overflow-y-auto` |
+
+**交互行为**:
+- 点击时间线条目 → 展开内联详情（`ChevronDown` ↔ `ChevronUp` 切换）
+- 手风琴模式：同时仅展开一个条目
+- 展开动画：`max-height` 过渡 150ms + `opacity`
+- 文件生成卡片中的文件项点击 → 底部 Sheet 弹出 DiffViewer（非内联展开，节省空间）
+- AgentOutputCard 完整规范见 [components/08-through-13.md](../components/08-through-13.md)
+
 ---
 
 ## 2. 筛选按钮

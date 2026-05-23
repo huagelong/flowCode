@@ -182,6 +182,57 @@
 | paused | `Pause` |
 | default | `FileText` |
 
+### 可展开详情
+
+点击时间线中的 `agent_log` 条目，展开内联详情面板，展示 Agent 执行的完整结构化内容：
+
+```
+│ 12:05  🤖 前端Agent                              ▼ 点击展开
+│        📄 Generated: src/login.tsx
+│        ──────
+│  ┌──────────────────────────────────────────────┐
+│  │ 📄 生成了 2 个文件                             │
+│  │ ─────────────────────────────────────────────│
+│  │ ✅ src/components/LoginForm.tsx    +42 -5     │
+│  │ ✅ src/hooks/useAuth.ts           +28 new     │
+│  │                                 [展开 Diff]   │
+│  └──────────────────────────────────────────────┘
+│        ──────
+│ 12:02  🤖 前端Agent
+│        📝 Starting: 读取 Issue 描述...
+```
+
+**展开规则**:
+
+| action | 展开后内容 | 组件 |
+|--------|-----------|------|
+| `generate` | 文件生成卡片（文件列表 + 可展开 DiffViewer） | AgentOutputCard (文件生成) |
+| `commit` | Commit 卡片（提交信息 + 哈希 + 文件变更统计 + 分支） | AgentOutputCard (Commit) |
+| `create_pr` | PR 创建卡片（标题 + source→target + 外部链接） | AgentOutputCard (PR 创建) |
+| `test_pass` | 测试通过卡片（绿色 + 用例列表） | AgentOutputCard (测试通过) |
+| `test_fail` | 测试失败卡片（红色 + 失败详情 + 堆栈） | AgentOutputCard (测试失败) |
+| `error` | 错误卡片（错误信息 + 堆栈 + 重试按钮） | AgentOutputCard (错误) |
+| `fix` | 修复内容摘要 + 文件变更卡片 | AgentOutputCard (文件生成) |
+| `paused` / 其他 | 不展开（无结构化详情） | — |
+
+**交互行为**:
+- 点击时间线条目行 → 展开内联详情面板（带 `ChevronDown` → `ChevronUp` 图标切换）
+- 展开动画：`max-height 0 → auto`，200ms ease-out + `opacity 0 → 1`
+- 同一时间只展开一个条目（手风琴模式），展开新条目时自动收起上一个
+- 展开区域宽度跟随时间线面板宽度
+- 文件生成卡片内的文件项可进一步点击展开 DiffViewer（嵌套展开）
+- DiffViewer 完整规范见 [components/08-through-13.md](../components/08-through-13.md)
+
+**展开区域样式**:
+
+| 属性 | 值 |
+|------|------|
+| 外边距 | `ml-6 mt-1 mb-1`（相对于时间线事件缩进） |
+| 背景 | 同 AgentOutputCard 各类型样式 |
+| 圆角 | `rounded-lg` |
+| 阴影 | `shadow-sm` |
+| 边框 | `border` |
+
 ### 实时更新
 
 - WebSocket 订阅 `issue:{id}` 频道

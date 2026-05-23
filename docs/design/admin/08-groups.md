@@ -135,8 +135,29 @@
 |--------|------|----------|------|
 | 用户 | 左 | 左侧 | `bg-muted rounded-lg px-3 py-2` |
 | Agent | 左 | 左侧 + Bot 图标 | `bg-card border rounded-lg px-3 py-2` |
+| Agent 成果卡片 | 左 | 🤖 图标 | AgentOutputCard 结构化卡片（见下） |
 | 系统 | 居中 | 无 | `bg-muted/50 text-muted-foreground text-xs italic rounded px-3 py-1` |
 | 方案确认卡片 | 左 | 📋 图标 | 交互式卡片（见下） |
+
+### Agent 成果卡片 (AgentOutputCard)
+
+Agent 消息中的结构化成果自动渲染为对应类型的 AgentOutputCard（与 Client 聊天窗口共享同一组件）：
+
+| 卡片类型 | 触发时机 | 渲染方式 |
+|----------|----------|----------|
+| 文件生成 | Agent 生成/修改文件 | 文件列表 + 可展开 DiffViewer |
+| Commit | Agent 提交代码 | 提交信息 + 哈希 + 文件变更统计 |
+| PR 创建 | Agent 创建 PR | PR 标题 + source→target + 外部链接 |
+| 测试通过 | Agent 运行测试通过 | 绿色卡片 + 用例列表 |
+| 测试失败 | Agent 测试有失败 | 红色卡片 + 失败详情 + 堆栈 |
+| 执行错误 | Agent 执行出错 | 错误信息 + 堆栈 + 重试按钮 |
+
+**渲染规则**:
+- Agent 消息中的普通文字用 Markdown 只读渲染
+- 结构化成果通过 WebSocket `agent_log` 事件中的 `action` 字段区分卡片类型
+- 卡片完整样式规范见 [components/08-through-13.md](../components/08-through-13.md) AgentOutputCard 部分
+- DiffViewer 同样共享，支持暗色/亮色主题
+- 所有卡片为**只读模式**（Admin 端无重试、无确认操作，仅展示）
 
 ### 方案确认卡片 (backlog_ack)
 

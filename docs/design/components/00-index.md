@@ -19,7 +19,9 @@
 | 09 | Command | shadcn/ui `Command` | ✅ 全局搜索 | ✅ @提及/搜索 |
 | 10 | MessageBubble | 自定义 | ❌ (只读) | ✅ 聊天窗口 |
 | 11 | Timeline | 自定义 | ✅ Issue 详情 | ✅ Issue 详情 |
-| 12 | CodeBlock | 自定义 | ❌ | ✅ Agent 代码输出 |
+| 12 | CodeBlock | 自定义 | ✅ 群组消息 | ✅ Agent 代码输出 |
+| 12b | DiffViewer | 自定义 (CodeBlock 扩展) | ✅ 时间线展开 / 群组消息 | ✅ Agent 代码变更 / 时间线展开 |
+| 12c | AgentOutputCard | 自定义 (多类型卡片) | ✅ 群组消息 / 时间线展开 | ✅ 聊天窗口 / 时间线展开 |
 | 13 | Chart | Recharts 封装 | ✅ Dashboard/Token | ❌ |
 | 14 | Notification | Sonner + 自定义 | ✅ 全局 | ✅ 全局 |
 | 15 | EmptyState | 自定义 | ✅ 空列表 | ✅ 空聊天 |

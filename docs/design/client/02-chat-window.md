@@ -117,6 +117,26 @@
 | 背景 | `transparent` |
 | Bot 角标 | 右下角 `bg-primary text-primary-foreground rounded-full` |
 
+#### Agent 成果卡片 (结构化输出)
+
+Agent 在执行过程中产生的代码改动、提交、PR、测试结果等，以结构化卡片渲染（非纯 Markdown 文本）。
+
+卡片类型及完整规范见 [components/08-through-13.md](../components/08-through-13.md) AgentOutputCard 部分：
+
+| 卡片类型 | 触发时机 | 渲染方式 |
+|----------|----------|----------|
+| 文件生成 | Agent 生成/修改文件 | 文件列表 + 可展开 DiffViewer |
+| Commit | Agent 提交代码 | 提交信息 + 文件变更统计 |
+| PR 创建 | Agent 创建 PR | PR 标题 + 分支 + 外部链接 |
+| 测试通过 | Agent 运行测试通过 | 绿色卡片 + 测试用例列表 |
+| 测试失败 | Agent 测试有失败 | 红色卡片 + 失败详情 + 堆栈 |
+| 执行错误 | Agent 执行出错 | 错误信息 + 可展开堆栈 + 重试按钮 |
+
+**卡片与 Markdown 混合渲染**:
+- Agent 消息中的普通文字用 Markdown 渲染
+- 结构化成果（文件、提交、PR、测试）自动识别并渲染为卡片
+- 通过 WebSocket `agent_log` 事件中的 `action` 字段区分卡片类型
+
 #### 系统消息
 
 用于非交互性的系统通知（如成员加入、会话创建等），不用于 Issue 生成：
