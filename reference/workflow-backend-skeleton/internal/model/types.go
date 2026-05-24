@@ -61,13 +61,12 @@ const (
 type IssueStatus string
 
 const (
-	IssueStatusPendingReview IssueStatus = "pending_review"
-	IssueStatusTodo          IssueStatus = "todo"
-	IssueStatusInProgress    IssueStatus = "in_progress"
-	IssueStatusBlocked       IssueStatus = "blocked"
-	IssueStatusInReview      IssueStatus = "in_review"
-	IssueStatusDone          IssueStatus = "done"
-	IssueStatusFailed        IssueStatus = "failed"
+	IssueStatusBacklog    IssueStatus = "backlog"
+	IssueStatusTodo       IssueStatus = "todo"
+	IssueStatusInProgress IssueStatus = "in_progress"
+	IssueStatusPaused     IssueStatus = "paused"
+	IssueStatusInReview   IssueStatus = "in_review"
+	IssueStatusDone       IssueStatus = "done"
 )
 
 type ReviewGateStatus string
@@ -205,6 +204,7 @@ type Issue struct {
 	ID               uint64           `gorm:"primaryKey"`
 	OrgID            uint64           `gorm:"not null;index"`
 	ProjectID        uint64           `gorm:"not null;index"`
+	ParentID         *uint64          `gorm:"index"`
 	SourcePlanID     uint64           `gorm:"not null;index"`
 	SourcePlanTaskID uint64           `gorm:"not null;uniqueIndex"`
 	Title            string           `gorm:"size:255;not null"`

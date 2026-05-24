@@ -23,8 +23,6 @@ Issue 状态流转逻辑分散在 `IssueService`、`Worker`、`Scheduler`、`Web
 
 |------|----|--------|--------|
 
-| `backlog` | `todo` | 人工确认 | 群聊通知 + 时间线 |
-
 | `todo` | `in_progress` | Scheduler 分配 | 群聊通知 + 时间线 + 通知被分配人 |
 
 | `in_progress` | `in_review` | 编码完成，Agent 推送代码并创建 PR | 群聊通知 + 时间线 + PR 链接 |
@@ -36,8 +34,6 @@ Issue 状态流转逻辑分散在 `IssueService`、`Worker`、`Scheduler`、`Web
 | `in_review` | `done` | GitHub Webhook 通知 PR 已 merge | 群聊通知 + 时间线 + worktree 清理 |
 
 | `in_review` | `todo` | PR 被拒绝/关闭未合并 | 群聊通知 + 时间线（worktree 保留待重试） |
-
-| `todo` | `backlog` | 人工退回 | 时间线 |
 
 **实现**：
 
@@ -87,11 +83,7 @@ func NewStatusManager() *StatusManager {
 
     // 注册合法流转
 
-    m.allow("backlog", "todo")
-
     m.allow("todo", "in_progress")
-
-    m.allow("todo", "backlog")
 
     m.allow("in_progress", "in_review")
 
@@ -175,9 +167,10 @@ func (m *StatusManager) Transition(ctx context.Context, issueID uint, from, to s
 
 statusMgr := status.NewStatusManager()
 
-// 所有含群聊通知的流转都注册群聊 Hook
+// 任务列表生成不是 backlog → todo 状态流转，而是创建 parent_id 指向 backlog 的 todo 子 Issue。
+// 所有含群聊通知的运行态流转都注册群聊 Hook。
 
-statusMgr.OnTransition("backlog", "todo",
+statusMgr.OnTransition("todo", "in_progress",
 
     func(ctx context.Context, issueID uint, from, to string) error {
 
@@ -187,7 +180,7 @@ statusMgr.OnTransition("backlog", "todo",
 
             msgService.SendSystemMessage(ctx, issue.SourceGroupID,
 
-                prompts.Get("system.issue.to_todo", issueID))
+                prompts.Get("system.issue.start", issueID))
 
         }
 
@@ -199,6 +192,6 @@ statusMgr.OnTransition("backlog", "todo",
 
 // 业务代码调用：一行代替多处 if/通知/时间线
 
-statusMgr.Transition(ctx, issueID, "backlog", "todo")
+statusMgr.Transition(ctx, issueID, "todo", "in_progress")
 
 ```

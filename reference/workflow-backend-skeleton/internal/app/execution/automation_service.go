@@ -200,7 +200,7 @@ func (s *service) Escalate(ctx context.Context, in EscalateInput) error {
 		if err := s.issues.UpdateAutomationStatus(ctx, tx, issue.ID, model.AutomationStatusEscalated); err != nil {
 			return err
 		}
-		return s.issues.UpdateStatus(ctx, tx, issue.ID, model.IssueStatusFailed)
+		return s.issues.UpdateStatus(ctx, tx, issue.ID, model.IssueStatusTodo)
 	})
 }
 
@@ -245,5 +245,8 @@ func canAutoRepair(issue *model.Issue) bool {
 	if issue == nil {
 		return false
 	}
-	return issue.Status == model.IssueStatusFailed || issue.AutomationStatus == model.AutomationStatusRetryWaiting
+	if issue.Status != model.IssueStatusTodo {
+		return false
+	}
+	return issue.AutomationStatus == model.AutomationStatusRetryWaiting || issue.AutomationStatus == model.AutomationStatusEscalated
 }

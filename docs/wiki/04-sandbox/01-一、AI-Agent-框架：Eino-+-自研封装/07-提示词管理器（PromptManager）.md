@@ -125,9 +125,9 @@ package prompts
 
 func init() {
 
-    defaultManager.prompts["system.issue.backlog_created"] = `已生成 Issue #%d（backlog），请到 backlog Tab 确认细节并启动`
+    defaultManager.prompts["system.issue.backlog_created"] = `已生成需求 Issue #%d（backlog）`
 
-    defaultManager.prompts["system.issue.to_todo"] = `Issue #%d 已确认转为 todo，排队等待执行`
+    defaultManager.prompts["system.issue.todo_created"] = `已为需求 Issue #%d 生成任务列表`
 
     defaultManager.prompts["system.issue.start"] = `Issue #%d 开始执行，Agent 已启动`
 

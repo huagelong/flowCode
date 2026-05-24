@@ -35,6 +35,7 @@ func toIssueView(issue *model.Issue) *IssueView {
 		ID:               issue.ID,
 		OrgID:            issue.OrgID,
 		ProjectID:        issue.ProjectID,
+		ParentID:         issue.ParentID,
 		SourcePlanID:     issue.SourcePlanID,
 		SourcePlanTaskID: issue.SourcePlanTaskID,
 		Title:            issue.Title,

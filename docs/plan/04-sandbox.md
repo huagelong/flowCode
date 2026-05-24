@@ -486,8 +486,6 @@ Issue 状态流转逻辑分散在 `IssueService`、`Worker`、`Scheduler`、`Web
 
 |------|----|--------|--------|
 
-| `backlog` | `todo` 子 Issue | /todo 分析任务 | 群聊通知 + 时间线 |
-
 | `todo` | `in_progress` | Scheduler 分配 | 群聊通知 + 时间线 + 通知被分配人 |
 
 | `in_progress` | `in_review` | 编码完成，Agent 推送代码并创建 PR | 群聊通知 + 时间线 + PR 链接 |
@@ -548,8 +546,6 @@ func NewStatusManager() *StatusManager {
     }
 
     // 注册合法流转
-
-    m.allow("backlog", "todo") // 仅用于生成 parent_id 指向 backlog 的 todo 子 Issue
 
     m.allow("todo", "in_progress")
 
@@ -636,9 +632,10 @@ func (m *StatusManager) Transition(ctx context.Context, issueID uint, from, to s
 
 statusMgr := status.NewStatusManager()
 
-// 所有含群聊通知的流转都注册群聊 Hook
+// 任务列表生成不是 backlog → todo 状态流转，而是创建 parent_id 指向 backlog 的 todo 子 Issue。
+// 所有含群聊通知的运行态流转都注册群聊 Hook。
 
-statusMgr.OnTransition("backlog", "todo",
+statusMgr.OnTransition("todo", "in_progress",
 
     func(ctx context.Context, issueID uint, from, to string) error {
 
@@ -648,7 +645,7 @@ statusMgr.OnTransition("backlog", "todo",
 
             msgService.SendSystemMessage(ctx, issue.SourceGroupID,
 
-                prompts.Get("system.issue.todo_created", issueID))
+                prompts.Get("system.issue.start", issueID))
 
         }
 
@@ -660,7 +657,7 @@ statusMgr.OnTransition("backlog", "todo",
 
 // 业务代码调用：一行代替多处 if/通知/时间线
 
-statusMgr.Transition(ctx, issueID, "backlog", "todo")
+statusMgr.Transition(ctx, issueID, "todo", "in_progress")
 
 ```
 
@@ -1106,7 +1103,7 @@ func (d *Dispatcher) Execute(ctx context.Context, llmOutput string, agent *model
 
 > **当前阶段入口**：Phase 1 仍使用显式命令 `/backlog`、`/todo`、`/new` 驱动。自然语言意图识别替代显式命令见 [06-agent.md](06-agent.md) §6.4，属于 [Phase 2](11-backlog.md) 能力。
 
-anserAgent 在群聊中监听 WebSocket 消息，检测到 `/backlog` 或 `/todo` 指令时触发方案拆解流程。两者共享 anserAgent 编排逻辑，区别仅在于 Issue 创建时的初始状态：
+anserAgent 在群聊中监听 WebSocket 消息，检测到 `/backlog` 或 `/todo` 指令时触发拆解流程：`/backlog` 创建需求 Issue，`/todo` 基于当前 backlog 需求创建一组 `parent_id` 指向该需求的任务 Issue。
 
 ```go
 
@@ -1120,15 +1117,15 @@ type CommandHandler struct {
 
 }
 
-// HandleBacklog 统一处理 /backlog 和 /todo 指令，initialStatus 决定 Issue 初始状态
+// HandleBacklog 创建 backlog 需求；HandleTodo 为指定 backlog 创建 todo 子 Issue
 
-func (h *CommandHandler) HandleBacklog(msg *ws.Message, initialStatus string) {
+func (h *CommandHandler) HandleBacklog(msg *ws.Message) {
 
     // ① 解析指令文本 + 收集群聊上下文（最近 50 条）
 
     // ② 输入校验：非空 + 上下文 ≥3 条
 
-    // ③ anserAgent 产出方案 → parser 拆解为 Issue
+    // ③ anserAgent 产出需求描述 → parser 创建 backlog Issue
 
     // ④ 写 DB + WS 广播结果
 
@@ -1142,7 +1139,7 @@ func (h *CommandHandler) HandleBacklog(msg *ws.Message, initialStatus string) {
 
 |------|-----------|--------|
 
-| Agent 参与 | ✅ anserAgent 编排产出方案 | ✅ anserAgent 编排产出方案 |
+| Agent 参与 | ✅ anserAgent 编排产出需求 | ✅ anserAgent 基于 backlog 分析任务 |
 
 | Issue 状态 | 创建需求 Issue（`backlog`） | 基于 backlog 创建子任务 Issue（`todo`） |
 

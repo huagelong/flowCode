@@ -42,6 +42,7 @@ type IssueView struct {
 	ID               uint64  `json:"id"`
 	OrgID            uint64  `json:"org_id"`
 	ProjectID        uint64  `json:"project_id"`
+	ParentID         *uint64 `json:"parent_id,omitempty"`
 	SourcePlanID     uint64  `json:"source_plan_id"`
 	SourcePlanTaskID uint64  `json:"source_plan_task_id"`
 	Title            string  `json:"title"`

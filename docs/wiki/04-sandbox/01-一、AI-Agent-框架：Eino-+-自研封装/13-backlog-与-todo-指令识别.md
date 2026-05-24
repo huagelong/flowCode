@@ -7,7 +7,7 @@
 
 > **当前阶段入口**：Phase 1 仍使用显式命令 `/backlog`、`/todo`、`/new` 驱动。自然语言意图识别替代显式命令见 [06-agent.md](../../06-agent/README.md) §6.4，属于 [Phase 2](../../11-backlog/README.md) 能力。
 
-anserAgent 在群聊中监听 WebSocket 消息，检测到 `/backlog` 或 `/todo` 指令时触发方案拆解流程。两者共享 anserAgent 编排逻辑，区别仅在于 Issue 创建时的初始状态：
+anserAgent 在群聊中监听 WebSocket 消息，检测到 `/backlog` 或 `/todo` 指令时触发拆解流程：`/backlog` 创建需求 Issue，`/todo` 基于当前 backlog 需求创建一组 `parent_id` 指向该需求的任务 Issue。
 
 ```go
 
@@ -21,15 +21,15 @@ type CommandHandler struct {
 
 }
 
-// HandleBacklog 统一处理 /backlog 和 /todo 指令，initialStatus 决定 Issue 初始状态
+// HandleBacklog 创建 backlog 需求；HandleTodo 为指定 backlog 创建 todo 子 Issue
 
-func (h *CommandHandler) HandleBacklog(msg *ws.Message, initialStatus string) {
+func (h *CommandHandler) HandleBacklog(msg *ws.Message) {
 
     // ① 解析指令文本 + 收集群聊上下文（最近 50 条）
 
     // ② 输入校验：非空 + 上下文 ≥3 条
 
-    // ③ anserAgent 产出方案 → parser 拆解为 Issue
+    // ③ anserAgent 产出需求描述 → parser 创建 backlog Issue
 
     // ④ 写 DB + WS 广播结果
 
@@ -43,10 +43,10 @@ func (h *CommandHandler) HandleBacklog(msg *ws.Message, initialStatus string) {
 
 |------|-----------|--------|
 
-| Agent 参与 | ✅ anserAgent 编排产出方案 | ✅ anserAgent 编排产出方案 |
+| Agent 参与 | ✅ anserAgent 编排产出需求 | ✅ anserAgent 基于 backlog 分析任务 |
 
-| Issue 状态 | `backlog` | `todo`（跳过 backlog） |
+| Issue 状态 | 创建需求 Issue（`backlog`） | 创建子任务 Issue（`todo`） |
 
-| 人工确认 | 需确认后转为 todo | 无需确认，直接可执行 |
+| 人工确认 | 无需确认 | 无需确认，直接可执行 |
 
-| 适用场景 | 需求模糊，需讨论出方案后再审 | 需求明确，希望快速推进到执行 |
+| 适用场景 | 记录原始需求与讨论上下文 | 从需求分析出可执行任务列表 |
