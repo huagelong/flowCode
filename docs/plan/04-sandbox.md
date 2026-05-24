@@ -30,7 +30,7 @@
 
 │  ├── backlog_parser.go   方案→Issue 拆解   │
 
-│  ├── prompt_optimizer.go 人工提示词 Eino 优化│
+│  ├── prompt_optimizer.go 补充指令 Eino 优化│
 
 │  ├── prompt_manager.go  提示词统一管理     │
 
@@ -124,7 +124,7 @@
 
 │               /backlog 方案拆解               │
 
-│               人工提示词优化 / Skill 自改进    │
+│               补充指令优化 / Skill 自改进      │
 
 │  anserAgent 不负责：代码生成 / 编码执行        │
 
@@ -1143,7 +1143,7 @@ func (h *CommandHandler) HandleBacklog(msg *ws.Message) {
 
 | Issue 状态 | 创建需求 Issue（`backlog`） | 基于 backlog 创建子任务 Issue（`todo`） |
 
-| 人工确认 | 无需确认 | 无需确认，直接可执行 |
+| 确认要求 | 无需确认 | 无需确认，直接可执行 |
 
 | 适用场景 | 记录原始需求与讨论上下文 | 从需求分析出可执行任务列表 |
 
@@ -1213,7 +1213,7 @@ func (o *GroupOrchestrator) InvokeWithMentions(ctx, agent, messages, mentions) {
 
 ```
 
-Eino 在将人工提示词注入 anserAgent 之前，自动进行上下文增强与工程化改写：
+Eino 在将补充指令注入 anserAgent 之前，自动进行上下文增强与工程化改写：
 
 ```go
 
@@ -1581,7 +1581,7 @@ docker exec anserflow-project-1 git branch -D feat/issue-42
 
 │  │  │   ├── Issue → todo（保留 worktree 待重试）      │  │
 
-│  │  │   └── 等待人工提示词 → 重试                     │  │
+│  │  │   └── 等待补充指令 → 重试                       │  │
 
 │  │  └── 项目容器不销毁（常驻，给其他 Issue 复用）      │  │
 

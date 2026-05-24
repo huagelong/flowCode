@@ -47,6 +47,6 @@ func (h *CommandHandler) HandleBacklog(msg *ws.Message) {
 
 | Issue 状态 | 创建需求 Issue（`backlog`） | 创建子任务 Issue（`todo`） |
 
-| 人工确认 | 无需确认 | 无需确认，直接可执行 |
+| 确认要求 | 无需确认 | 无需确认，直接可执行 |
 
 | 适用场景 | 记录原始需求与讨论上下文 | 从需求分析出可执行任务列表 |

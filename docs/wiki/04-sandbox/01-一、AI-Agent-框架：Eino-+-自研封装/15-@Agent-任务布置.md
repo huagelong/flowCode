@@ -33,7 +33,7 @@ func (o *GroupOrchestrator) InvokeWithMentions(ctx, agent, messages, mentions) {
 
 ```
 
-Eino 在将人工提示词注入 anserAgent 之前，自动进行上下文增强与工程化改写：
+Eino 在将补充指令注入 anserAgent 之前，自动进行上下文增强与工程化改写：
 
 ```go
 
