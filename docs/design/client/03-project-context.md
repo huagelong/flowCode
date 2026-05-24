@@ -106,6 +106,25 @@
 - 选中的状态高亮，其他灰色
 - 每个 Tab 显示对应 Issue 数量
 
+### Issues Tab 空状态
+
+筛选无结果或项目无 Issue 时：
+
+```
+┌─────────────────────────────┐
+│                             │
+│     [📋 图标 36px]          │
+│                             │
+│   暂无 Issue                │
+│ 通过群组讨论让 Agent 生成   │
+│ 或手动创建                  │
+│                             │
+└─────────────────────────────┘
+```
+
+- `text-xs text-muted-foreground`
+- 筛选无结果时显示 "该状态下暂无 Issue"
+
 ---
 
 ## 4. Tab: Agent
@@ -158,6 +177,25 @@
 | 在线 | `CheckCircle2` | `text-green-500` |
 | 执行中 | `Loader2` (spinning) | `text-amber-500` |
 | 离线/禁用 | `Circle` | `text-muted-foreground` |
+
+### Agent Tab 空状态
+
+项目未关联 Agent 时：
+
+```
+┌─────────────────────────────┐
+│                             │
+│     [🤖 图标 36px]          │
+│                             │
+│   暂无 Agent                │
+│ 请在管理后台为项目配置 Agent│
+│                             │
+└─────────────────────────────┘
+```
+
+### Agent 卡片交互
+
+- 点击 Agent 卡片 → 打开与该 Agent 的 DM 会话（切换 Column 2 + Column 3）
 
 ---
 

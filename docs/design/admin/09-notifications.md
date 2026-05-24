@@ -72,6 +72,22 @@
 - **"全部标为已读"**: `PUT /api/notifications/read-all` + 刷新列表
 - **删除**: 不提供删除，通知为持久记录
 
+### 点击跳转路由
+
+| 通知类型 | 跳转目标 | 说明 |
+|----------|----------|------|
+| `issue_assigned` | `/admin/projects/:project_id` (Issues Tab, 选中该 Issue) | 展开详情面板 |
+| `issue_status_changed` | `/admin/projects/:project_id` (Issues Tab, 选中该 Issue) | 展开详情面板 |
+| `plan_generated` | `/admin/groups/:group_id` (消息记录 Tab) | 滚动到确认卡片位置 |
+| `agent_completed` | `/admin/projects/:project_id` (Issues Tab, 选中该 Issue) | 展开时间线 |
+| `agent_failed` | `/admin/projects/:project_id` (Issues Tab, 选中该 Issue) | 展开时间线 |
+| `mention` | `/admin/groups/:group_id` (消息记录 Tab) | 滚动到 @提及消息位置 |
+| `dm_message` | `/admin/groups/:group_id` (消息记录 Tab) | 打开 DM 会话 |
+| `invite` | 邀请接受页 `/invite/:token` | 处理邀请 |
+
+- 跳转时通过 URL query `?highlight=msg_id` 或 `?issue_id=42` 定位具体条目
+- 目标条目高亮闪烁 2s（`bg-primary/10` → `bg-transparent` 过渡）
+
 ---
 
 ## 2. 顶部通知铃铛
