@@ -224,9 +224,9 @@ func (h *Hub) SendToUser(userID uint, msg interface{}) {
 |------|------|------|-----------------|--------|
 | `message` | C→S / S→C | 普通聊天消息 | `text: string` | ✅ messages 表 |
 | `annotation` | S→C | Agent 分析/技术评审（非对话消息） | `text: string`, `role: "analysis"\|"review"\|"estimate"` | ✅ messages 表 |
-| `backlog` | S→C | 方案产出（`/backlog` 指令触发，Issue 状态=backlog，需人工确认） | `issue: {title, status: "backlog", priority, assignee, description}` | ✅ messages 表 |
-| `todo` | S→C | 直接建任务（`/todo` 指令触发，Issue 状态=todo） | `issue: {title, status: "todo", priority, assignee, description}` | ✅ messages 表 |
-| `backlog_ack` | C→S | 方案确认/拒绝 | `backlog_id: string`, `accepted: bool` | ❌ 不持久化 |
+| `backlog` | S→C | 需求产出（`/backlog` 指令触发，Issue 状态=backlog） | `issue: {title, status: "backlog", priority, assignee, description}` | ✅ messages 表 |
+| `todo` | S→C | 任务列表产出（从 backlog 分析出的子 Issue，状态=todo） | `issues: [{title, status: "todo", parent_id, priority, assignee, description}]` | ✅ messages 表 |
+| `review_decision` | C→S | 审核中人工决策 | `issue_id: string`, `decision: "approved"\|"changes_requested"`, `comment: string` | ✅ issue_timeline 表 |
 | `system` | S→C | 系统通知（Issue 创建/状态变更） | `text: string`, `resource_type: "issue"\|"agent"`, `resource_id` | ✅ messages 表 |
 | `agent_log` | S→C | 沙箱执行日志（推送到 issue 频道） | `text: string`, `ts: int64` | ✅ agent_logs + issue_timeline 表 |
 | `status_change` | S→C | 执行控制状态变更（暂停/恢复/停止） | `status: string`, `hint: string` | ✅ issue_timeline 表 |
@@ -242,7 +242,7 @@ func (h *Hub) SendToUser(userID uint, msg interface{}) {
 | `command` | S→C | 指令消息回显（用户输入的 /xxx 指令原文） | `text: string`, `command: string` | ✅ messages 表 |
 | `native_notification` | S→C | 浏览器原生通知触发 | `title: string`, `body: string`, `channel: string` | ❌ |
 
-**`/todo` 直接建任务指令**：群内自然人发送 `/todo` 后，anserAgent 从群聊讨论上下文中自动总结生成 Issue 标题和方案，直接创建状态为 `todo` 的 Issue，跳过 backlog 人工确认环节，创建后即可进入执行队列。Issue 标题由 anserAgent 自动生成，用户无需手动指定。与 `/backlog` 的区别：两者都由 anserAgent 编排产出方案，Issue 标题均自动总结生成；但 `/backlog` 创建后状态为 `backlog` 需人工确认转为 todo；`/todo` 创建后状态直接为 `todo`，无需人工确认，适合需求已明确、希望快速推进到执行的场景。
+**`/todo` 任务列表生成指令**：群内自然人发送 `/todo` 后，anserAgent 从当前 backlog 需求与群聊讨论上下文中分析任务列表，创建一组 `status=todo` 的子 Issue，并通过 `parent_id` 归属到同一个 backlog Issue 下。该步骤不需要人工确认；生成后的任务可被调度器按优先级进入 `in_progress`。
 
 **@Agent 任务布置**：群内 Agent 在讨论或执行过程中，可根据其他 Agent 的角色定义（`agents.system_prompt` + 绑定的 Skills），通过 `@AgentName` 语法向指定 Agent 布置子任务。被 @ 的 Agent 接收消息后，由 anserAgent 根据其角色人设和记忆系统自动生成响应或执行操作。典型场景：CTO Agent 在讨论中说 `@前端Agent 你负责登录页 UI 实现`，系统解析 `@前端Agent` 匹配群内 Agent 成员，将任务描述注入该 Agent 的上下文。
 
@@ -262,7 +262,7 @@ func (h *Hub) SendToUser(userID uint, msg interface{}) {
 | `message` / `system` / `annotation` / `backlog` / `todo` / `new_session` / `command` | `messages` 表 | 聊天记录、系统通知、方案产出、指令回显 |
 | `agent_log` | `agent_logs` + `issue_timeline` 表 | 沙箱执行日志（不写入 messages 表） |
 | `status_change` | `issue_timeline` 表 | 执行控制事件（暂停/恢复/停止） |
-| `typing` / `ping` / `pong` / `subscribe` / `unsubscribe` / `backlog_ack` / `native_notification` | 不持久化 | 瞬时状态/控制信令 |
+| `typing` / `ping` / `pong` / `subscribe` / `unsubscribe` / `native_notification` | 不持久化 | 瞬时状态/控制信令 |
 
 > **原则**：需要历史回看的消息写 `messages` 表；仅 Issue 维度的执行记录写 `agent_logs` / `issue_timeline` 表；瞬时状态和信令不持久化。
 
@@ -287,19 +287,19 @@ Hub 的 `OnMessage` 入口统一根据 `HasAgentMember()` 决定是否触发 ans
 |------|------|
 | `HasAgentMember()` 决定 anserAgent 编排和 /backlog、/todo | 群聊和双人聊共享同一套逻辑，不按 type 分支 |
 | `/new` 全模式可用 | CommandHandler 独立于 HasAgentMember()，在 Hub 层直接调用 |
-| `/todo` 仅含 Agent 时可用 | 需要 anserAgent 编排产出方案，Issue 状态直接为 todo，跳过人工确认 |
-| `/backlog` 仅含 Agent 时可用 | 需要 anserAgent 编排产出方案，Issue 状态为 backlog，需人工确认 |
+| `/todo` 仅含 Agent 时可用 | 需要 anserAgent 基于 backlog 分析任务列表，生成 `status=todo` 的子 Issue |
+| `/backlog` 仅含 Agent 时可用 | 需要 anserAgent 编排产出需求 Issue，状态为 backlog |
 | 指令消息不触发 anserAgent 编排 | Hub 检测到指令后 `return`，避免 CommandHandler 内部编排和 anserAgent 双重触发 |
 | 无 Agent 时不触发 `MentionResolver` | 群聊无 Agent 时同样跳过，双人聊天然无 @场景 |
 | direct 成员不可变更 | Handler 层对 direct 类型返回 400（group 类型不受此限制） |
 
-**`backlog_ack` 确认闭环**：
+**`review_decision` 审核闭环**：
 
-用户在群聊中对 `/backlog` 方案进行确认或拒绝，Hub 收到 `backlog_ack` 消息后触发状态流转：
+用户只在 `in_review` 状态对 PR 进行人工审核。Hub 收到 `review_decision` 消息后触发状态流转：
 
-**backlog_ack 处理实现**: [backend-code-examples.md §WebSocket](../../reference/backend-code-examples.md#websocket-分布式架构)
+**review_decision 处理实现**: [backend-code-examples.md §WebSocket](../../reference/backend-code-examples.md#websocket-分布式架构)
 
-> **前端交互**：`/backlog` 指令产出方案后，群聊中展示 Issue 卡片 + [确认] [拒绝] 按钮。用户点击后发送 `backlog_ack` 消息。确认后 Issue 进入 `todo` 状态，调度器自动拾取执行。
+> **前端交互**：Agent 执行通过后进入 `in_review`，群聊中展示 PR 卡片 + [审核通过] [退回修改] 按钮。审核通过等待 GitHub merged webhook 后进入 `done`；退回修改则回到 `todo` 并保留任务上下文。
 
 **Redis 消息缓存**（断线重连恢复）：
 
@@ -353,11 +353,11 @@ Issue 状态变为 in_progress (assignee = agent)
 │ Asynq Worker      │  →  HandleFunc("agent:execute", handler)
 │ (独立进程/协程)   │     1. 创建 Docker 沙箱
 └──────────────────┘     2. 注入 anserAgent 配置 + Agent 人设
-        │                3. 注入人工提示词（来自 issue_timeline）
+        │                3. 注入补充指令（来自 issue_timeline）
         ▼                4. anserAgent run 执行编码
 ┌──────────────────┐     5. anserAgent 检查结果
 │ Docker Sandbox    │     6. 通过 → commit + push + PR → in_review
-└──────────────────┘     7. 失败 → 写入时间线 → 人工介入重试
+└──────────────────┘     7. 失败 → 写入时间线 → 回到 todo 等待重试
 ```
 
 Asynq 核心特性：
@@ -367,7 +367,7 @@ Asynq 核心特性：
 | 任务优先级 | P0 Issue 插队执行 |
 | 重试机制 | 执行失败自动重试 3 次 |
 | 超时控制 | 单任务最长 30 分钟 |
-| 死信队列 | 3 次重试仍失败 → 人工介入 |
+| 死信队列 | 3 次重试仍失败 → 保持 todo 并标记为升级处理 |
 | 定时任务 | 延迟执行（Agent 启动冷却期） |
 | Web UI | Asynqmon 可视化管理面板 |
 
@@ -399,10 +399,10 @@ Asynq 核心特性：
 | Worker 消费 | `in_progress` | Active（已 dequeue） | 不在 Redis 队列中 |
 | 人工暂停 | `in_progress → paused` | Active（Worker 心跳等待） | Docker 容器冻结 |
 | 人工恢复 | `paused → in_progress` | Active（Worker 心跳跳出） | Docker 容器解冻 |
-| 人工停止 | `in_progress/paused → backlog` | 终止（goroutine 退出） | worktree 保留，anserAgent 进程终止 |
+| 停止执行 | `in_progress/paused → todo` | 终止（goroutine 退出） | worktree 保留，anserAgent 进程终止 |
 | anserAgent 成功 | `in_progress → in_review` | Completed | 任务返回 nil |
 | anserAgent 失败 | `in_progress → todo` | Failed → 重新入队（retry_count+1） | 保留沙箱 |
-| 重试耗尽 | `todo → backlog` | Archived（死信队列） | 销毁沙箱 |
+| 重试耗尽 | `todo`（标记升级处理） | Archived（死信队列） | 保留 Issue 与 parent backlog 关系 |
 
 #### 调度器无限重试防护
 
@@ -411,7 +411,7 @@ Asynq 核心特性：
 ```sql
 -- issues 表新增字段
 ALTER TABLE issues ADD COLUMN retry_count INT DEFAULT 0;
--- 重试次数仅在人工确认转为 todo 时重置为 0
+-- 重试次数仅在重新生成任务列表或手动重新执行时重置为 0
 ```
 
 **调度器过滤**（已在 `FindSchedulableIssues` 中加入 `WHERE retry_count < 3`）。
@@ -420,11 +420,11 @@ ALTER TABLE issues ADD COLUMN retry_count INT DEFAULT 0;
 
 **重试处理实现**: [backend-code-examples.md §任务队列](../../reference/backend-code-examples.md#任务队列asynq)
 
-**人工确认重置**（仅当用户手动点击 [转为 todo] 时重置）：
+**重试重置**（仅当重新生成任务列表或手动重新执行时重置）：
 
-**人工确认重置实现**: [backend-code-examples.md §任务队列](../../reference/backend-code-examples.md#任务队列asynq)
+**重试重置实现**: [backend-code-examples.md §任务队列](../../reference/backend-code-examples.md#任务队列asynq)
 
-> **防护效果**：同一 Issue 最多经历 3 次自动重试循环（`todo → in_progress → 失败 → todo`），第 4 次自动回退 `backlog` 并通知人工介入。仅人工确认后重置 `retry_count`。
+> **防护效果**：同一 Issue 最多经历 3 次自动重试循环（`todo → in_progress → 失败 → todo`），第 4 次保持 `todo` 并标记升级处理，不回退到 `backlog`，避免把任务错误地变回需求。
 
 ### 1.3 整体分布式拓扑
 
@@ -866,7 +866,7 @@ erDiagram
 | `agent_skills` | Agent ↔ Skill 绑定 | agent_id, skill_id, enabled |
 | `runtime_skills` | Runtime ↔ Skill 默认绑定 | runtime_id, skill_id, enabled |
 | `projects` | 项目 | org_id, git_platform, git_repo_url, git_auth_credential, sandbox_container_id |
-| `issues` | Issue 任务 | project_id, parent_id, status, priority, source_group_id, pr_url |
+| `issues` | Issue 需求/任务统一表 | project_id, parent_id, status, priority, source_group_id, pr_url |
 | `issue_assignee` | Issue 分配（1 Issue = 1 assignee） | issue_id(UNIQUE), user_id, agent_id |
 | `issue_timeline` | Issue 状态时间线 | issue_id, actor_type, event_type, old_status, new_status, comment |
 | `groups` | 会话组（group/direct） | org_id, type, project_id, name |
@@ -874,16 +874,15 @@ erDiagram
 | `messages` | 群消息 | group_id, session_id, sender_type, content, mention_agent_id |
 | `invitations` | 组织邀请 | org_id, token(UNIQUE), invite_type, email, max_uses |
 | `invitation_usages` | 邀请接受记录 | invitation_id, user_id, assigned_role |
-| `todos` | 可执行子任务 [远期] | project_id, status, assigned_agent_id, linked_issue_id |
 | `audit_logs` | 审计日志 | org_id, user_id, action, resource_type, resource_id, detail(JSON) |
 | `notifications` | 通知 | user_id, type, title, is_read, push_channel |
 | `user_settings` | 用户偏好 | user_id(UNIQUE), theme, notify_* flags |
 | `group_read_state` | 会话已读状态 | group_id + user_id(UNIQUE), last_read_message_id |
 | `casbin_rules` | Casbin 策略表 | ptype(p/g), v0(sub), v1(obj), v2(act) |
 
-**表总数**: 23 张（含 Casbin 策略表）
+**表总数**: 22 张（含 Casbin 策略表）
 
-> **Issue 与 Todo 的关系**：Issue（执行层，粗粒度，backlog→done）可拆解为 N 个 Todo（规划层，细粒度，todo→done）。L1-L4 先闭环 Issue 流程；Todo 模块为 [Phase 2](11-backlog.md) 能力。
+> **Issue 与 Todo 的关系**：`backlog`、`todo`、`in_progress`、`in_review`、`done` 都是 `issues.status` 的不同状态，不再引入独立 `todos` 表。`backlog` 表示需求；`todo` 表示从 backlog 分析出的任务 Issue；同一个 backlog 的任务通过 `issues.parent_id` 放在该 backlog Issue 下。只有 `in_review` 需要人工审核，此时关联/创建 PR；`done` 表示 PR 已完成。
 
 ### 2.3 邀请机制说明
 
@@ -1071,19 +1070,13 @@ func (s *Sender) SendAgentNotification(
 │   │   │   ├── /:issue_id/status          PUT  → 🔒 状态流转
 │   │   │   ├── /:issue_id/assign          PUT  → 🔐 分配/更改负责人
 │   │   │   ├── /:issue_id/children        GET  → 子 Issue 列表
-│   │   │   ├── /batch-status                PUT  → 🔒 批量状态变更（backlog→todo / todo→backlog）
-│   │   │   ├── /:issue_id/timeline         GET  → 状态时间线（含人工提示词历史）
-│   │   │   ├── /:issue_id/prompt           POST → 🔒 追加人工提示词（重新触发执行）
+│   │   │   ├── /batch-analyze               POST → 🔒 批量分析 backlog，生成 todo 子 Issue
+│   │   │   ├── /:issue_id/timeline         GET  → 状态时间线（含补充指令历史）
+│   │   │   ├── /:issue_id/prompt           POST → 🔒 追加补充指令（重新触发执行）
 │   │   │   ├── /:issue_id/pause            POST → 🔒 暂停执行（冻结沙箱）
 │   │   │   ├── /:issue_id/resume           POST → 🔒 恢复执行（解冻沙箱）
-│   │   │   └── /:issue_id/stop             POST → 🔒 停止执行（终止沙箱 → backlog）
-│   │   │
-│   │   ├── /:project_id/todos            Todo 管理 [远期]
-│   │   │   ├── /                          GET  → Todo 列表
-│   │   │   ├── /                          POST → 🔐 创建 Todo
-│   │   │   ├── /:todo_id                  PUT  → 🔒 更新 Todo
-│   │   │   ├── /:todo_id                  DELETE → 🔐 删除 Todo
-│   │   │   └── /:todo_id/status           PUT  → 🔒 状态变更
+│   │   │   ├── /:issue_id/stop             POST → 🔒 停止执行（终止沙箱 → todo）
+│   │   │   └── /:issue_id/review           POST → 🔒 审核中决策（通过/退回）
 │   │   │
 │   │   └── /:project_id/groups           项目群组
 │   │       ├── /                          GET  → 群组列表
@@ -1599,7 +1592,7 @@ func (s *NotificationService) NotifyInvite(
 
 ## 三、核心业务流程
 
-### 3.1 需求讨论 → /backlog 自动生成 Issue
+### 3.1 需求讨论 → backlog 需求 → todo 任务列表
 
 ```mermaid
 sequenceDiagram
@@ -1619,54 +1612,54 @@ sequenceDiagram
     ORC->>DEV: 调度 DEV Agent 评估工时
     DEV->>G: [评估] 前端预计 4h
 
-    H->>G: /backlog 生成执行方案
-    ORC->>ORC: 收集讨论上下文 → 结构化方案
+    H->>G: /backlog 生成需求
+    ORC->>ORC: 收集讨论上下文 → 结构化需求
     ORC->>SYS: 调用 Issue 服务创建（状态=backlog）
 
-    SYS->>SYS: 创建 Issue #1: 实现用户登录页面 (backlog, P1, →前端Agent)
-    SYS->>G: 系统消息: 已生成 Issue #1（backlog），请到 backlog Tab 确认细节并启动
+    SYS->>SYS: 创建 Issue #1: 用户登录页需求 (backlog, P1)
+    SYS->>G: 系统消息: 已生成需求 Issue #1（backlog）
+    H->>G: /todo 分析任务列表
+    ORC->>ORC: 基于 Issue #1 + 当前讨论分析任务
+    ORC->>SYS: 创建 parent_id=#1 的 todo 子 Issue
+    SYS->>SYS: 创建 Issue #2/#3/#4 (todo, parent_id=#1)
+    SYS->>G: 系统消息: Issue #1 下已生成 3 个任务
 ```
 
-**Tab 视图操作**（backlog → 确认/编辑 → 转为 todo）：
+**Tab 视图操作**（backlog 是需求，todo 是同一需求下的任务列表）：
 
 ```
 ┌─ 项目 Issues ──────────────────────────────────────────────────────────────────┐
-│  [ backlog 3 ]   todo 5    in_progress 2    in_review 1    done 12            │
+│  [ 需求 3 ]   任务 5    in_progress 2    in_review 1    done 12               │
 ├────────────────────────────────────────────────────────────────────────────────┤
-│  ← 当前选中 backlog Tab，下面只展示 backlog 状态的 Issue                           │
+│  ← 当前选中 backlog Tab，下面展示需求 Issue 与其任务列表摘要                         │
 │                                                                                │
-│  ☐ Issue #1  实现用户登录页面                        P1  前端Agent  12:00     │
-│  │ 描述: 使用 React Hook Form + Zod 实现...          [转为 todo] [编辑]       │
+│  Issue #1  用户登录页需求                              P1  张三      12:00     │
+│  │ 描述: 支持账号密码登录、错误提示、登录态保持...       [分析任务] [编辑]       │
 │  │ ── 时间线 ─────────────────────────────────────────────────────────────── │
 │  │ 12:00  system   /backlog 创建此 Issue                                      │
-│  │ 12:05  张三     编辑了标题 + 补充验收标准                                     │
-│  │ 12:06  system   Eino 优化了描述（补充了错误处理边界）                          │
+│  │ 12:05  system   /todo 生成 3 个子任务                                       │
+│  │ ── 任务列表 ───────────────────────────────────────────────────────────── │
+│  │ #2 登录表单 UI（todo） · #3 JWT 登录 API（todo） · #4 登录态保持（todo）        │
 │  ├────────────────────────────────────────────────────────────────────────────┤
-│  ☐ Issue #2  JWT 认证 API 实现                       P0  后端Agent  11:30     │
-│  │ 描述: 实现 JWT 签发/验证，token 格式需要 @Issue #1 的登录接口对接...          │
-│  │        [转为 todo] [编辑]                                                    │
-│  ├────────────────────────────────────────────────────────────────────────────┤
-│  ☐ Issue #3  密码加密存储                            P0  后端Agent  11:28     │
-│  │ 描述: 使用 bcrypt 对密码加盐哈希...      [转为 todo] [编辑]                  │
+│  Issue #5  权限管理需求                                P2  李四      11:30     │
+│  │ 描述: 管理员邀请成员并分配角色...                    [分析任务] [编辑]       │
 │  └────────────────────────────────────────────────────────────────────────────┘
-│                                                                                │
-│  ☑ 已选 3 个  [一键转为 todo]  [批量编辑优先级]                                 │
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 点击 `todo 5` 标签后，列表切换为：
 
 ```
-│  [ backlog 3 ]  [ todo 5 ]  in_progress 2    in_review 1    done 12          │
+│  [ 需求 3 ]  [ 任务 5 ]  in_progress 2    in_review 1    done 12             │
 ├────────────────────────────────────────────────────────────────────────────────┤
-│  ← 当前选中 todo Tab，下面只展示 todo 状态的 Issue                                  │
+│  ← 当前选中 todo Tab，下面展示所有待执行任务 Issue，可按 parent backlog 分组          │
 │                                                                                │
-│  Issue #4  API 接口文档编写                            P2  后端Agent  11:50    │
+│  需求 #1 用户登录页需求                                                           │
+│  │ Issue #2  登录表单 UI                           P1  前端Agent  11:50       │
 │  │ 状态: 排队中（第 2 位），预估等待 3 分钟                                       │
-│  │ 时间线: 11:50 转为 todo · 11:50 加入调度队列                                   │
 │  ├────────────────────────────────────────────────────────────────────────────┤
-│  Issue #5  单元测试补充                              P2  前端Agent  11:40    │
-│  │ 状态: 排队中（第 3 位）                                                       │
+│  │ Issue #3  JWT 登录 API                          P0  后端Agent  11:40       │
+│  │ 状态: 排队中（第 1 位）                                                       │
 │  └────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1679,8 +1672,8 @@ sequenceDiagram
 | 顶部 Tab 栏 | 按状态分页，Tab 上显示各状态的 Issue 数量 |
 | 当前 Tab | 默认进入 `backlog` Tab，展开第一个 Issue 的时间线 |
 | Issue 行 | 可展开/折叠，展开后显示描述摘要 + 最近 3 条时间线 |
-| 转为 todo | 按钮操作（非拖动），确认后 Issue 移入 todo Tab |
-| 批量操作 | 勾选多行 → 一键批量转 todo / 批量编辑优先级 |
+| 任务列表 | `todo` 是从 backlog 分析出的子 Issue，通过 `parent_id` 归属到同一个 backlog |
+| 批量操作 | 勾选多行 → 批量分析任务 / 批量编辑优先级 |
 | 状态流转 | todo Tab 中 Issue 会自动消失（调度器转为 in_progress 后移到对应 Tab） |
 
 **Issue 编辑能力**（backlog / todo 阶段均可）：
@@ -1692,7 +1685,7 @@ sequenceDiagram
 | 调整优先级 | P0-P4 下拉切换 |
 | 修改负责人 | 重新分配 Agent 或自然人 |
 | 删除 Issue | 仅 backlog 状态可删除 |
-| 批量转 todo | Shift/Ctrl 多选 backlog Issue（来自多次 /backlog 调用）→ 一键全部转为 todo 列入执行队列 |
+| 批量分析任务 | Shift/Ctrl 多选 backlog Issue（来自多次 /backlog 调用）→ 批量生成各自的 todo 子 Issue |
 | @关联 Issue | 描述中通过 `@Issue #N` 引用其他 Issue，anserAgent 自动读取被引用 Issue 的内容注入到 anserAgent 执行提示词 |
 
 ### 3.1.1 @Agent 任务布置（Agent 间协作）
@@ -1760,7 +1753,7 @@ sequenceDiagram
 | Agent 感知 | Agent 收到新会话的首条消息时，其 System Prompt 追加 "这是一个新讨论主题的开端" |
 | `/backlog` 作用域 | `/backlog` 指令仅收集当前 session 内的讨论上下文 |
 
-### 3.2 Agent 自动执行（backlog→todo→in_progress→in_review→done）
+### 3.2 Agent 自动执行（todo→in_progress→in_review→done）
 
 ```mermaid
 sequenceDiagram
@@ -1773,26 +1766,25 @@ sequenceDiagram
     participant WS as WebSocket
     participant G as 群聊
 
-    Note over H,ISS: ① backlog Tab 点击 [转为 todo]
-    H->>ISS: 点击 Issue #1 的 [转为 todo]
-    ISS->>ISS: 记录状态变更（issue_timeline）
+    Note over ISS,Q: ① todo 任务自动调度
+    ISS->>ISS: 读取 parent backlog 下的 todo 子 Issue
     ISS->>Q: 加入排队（按优先级+创建时间）
-    ISS->>WS: 推送 "Issue #1 已排队等待执行"
-    ISS->>G: 系统消息: "Issue #1 已确认转为 todo，排队等待执行"
+    ISS->>WS: 推送 "Issue #2 已排队等待执行"
+    ISS->>G: 系统消息: "Issue #2 已进入任务队列"
 
     Note over ISS,Q: ② 自动调度 todo → in_progress
     Q->>Q: 调度器检查队列 + 资源可用
     ISS->>ISS: Issue 状态 → in_progress
-    ISS->>ISS: 记录状态变更 + 注入人工提示词
+    ISS->>ISS: 记录状态变更 + 注入补充指令
     ISS->>ISS: 检查 assignee 类型 = agent
     ISS->>Q: enqueue("agent:execute", {issue_id, agent_id, human_prompts})
     Q-->>ISS: task_id
-    ISS->>WS: 推送 "Agent 开始执行 Issue #1"
-    ISS->>G: 系统消息: "Issue #1 开始执行，Agent 已启动"
+    ISS->>WS: 推送 "Agent 开始执行 Issue #2"
+    ISS->>G: 系统消息: "Issue #2 开始执行，Agent 已启动"
 
     Note over W,D: ③ Worker 执行
     W->>Q: dequeue → "agent:execute"
-    W->>W: 加载 Agent 配置 + Skills + 人工提示词
+    W->>W: 加载 Agent 配置 + Skills + 补充指令
     W->>W: 解析描述中的 @Issue #N → 读取关联 Issue 内容
     W->>D: 创建沙箱容器
     W->>D: git clone → 注入配置 + 关联Issue上下文 → anserAgent run
@@ -1805,7 +1797,7 @@ sequenceDiagram
     W->>D: 冻结容器（内存保留）
     ISS->>ISS: Issue → paused + 时间线
     ISS->>WS: 推送 "执行已暂停"
-    ISS->>G: 系统消息: "Issue #1 执行已暂停"
+    ISS->>G: 系统消息: "Issue #2 执行已暂停"
     H->>ISS: 点击 [恢复]
     ISS->>W: ContainerUnpause
     W->>D: 解冻容器
@@ -1814,9 +1806,9 @@ sequenceDiagram
         H->>ISS: 点击 [停止]
         ISS->>W: ContainerStop + Remove
         W->>D: 终止 + 销毁容器
-        ISS->>ISS: Issue → backlog + 时间线
+        ISS->>ISS: Issue → todo + 时间线
         ISS->>WS: 推送 "执行已停止"
-        ISS->>G: 系统消息: "Issue #1 执行已停止"
+        ISS->>G: 系统消息: "Issue #2 执行已停止"
     end
 
     Note over W,GH: ④ anserAgent 自检查 → PR
@@ -1827,26 +1819,26 @@ sequenceDiagram
         W->>GH: 创建 Pull Request
         W->>ISS: 更新 Issue status → in_review + 写入 pr_url
         W->>WS: 推送通知 "PR 已提交，等待审核"
-        W->>G: 系统消息: "Issue #1 PR 已提交，等待审核"
+        W->>G: 系统消息: "Issue #2 PR 已提交，等待审核"
     else anserAgent 检查失败
         W->>ISS: 写入失败原因到时间线
         W->>ISS: Issue 状态 → todo（保留沙箱）
-        W->>WS: 推送 "执行失败: {原因}，等待人工介入"
-        W->>G: 系统消息: "Issue #1 执行失败: {原因}"
-        Note over H,D: 人工在时间线追加提示词 → Eino 优化 → 重新调度
-        ISS->>ISS: 收到人工提示词 → Issue → in_progress
+        W->>WS: 推送 "执行失败: {原因}，已退回任务列表"
+        W->>G: 系统消息: "Issue #2 执行失败: {原因}"
+        Note over H,D: 可在任务详情追加执行指令 → 重新调度
+        ISS->>ISS: 收到补充指令 → Issue → in_progress
         ISS->>Q: enqueue("agent:execute", {issue_id, human_prompts_optimized})
         W->>Q: dequeue → 检测已有沙箱 → 复用旧沙箱
         W->>D: 注入新的优化提示词 → anserAgent run（基于上次工作区继续）
     end
 
-    Note over H,GH: ⑤ PR 审核 → merge → done
+    Note over H,GH: ⑤ in_review 人工审核 → merge → done
     H->>GH: Review PR → Approve → Merge
     GH-->>ISS: Webhook: PR merged
     ISS->>ISS: Issue 状态 → done
     ISS->>ISS: 记录状态变更
-    ISS->>WS: 推送 "Issue #1 已完成"
-    ISS->>G: 系统消息: "Issue #1 已完成 ✅"
+    ISS->>WS: 推送 "Issue #2 已完成"
+    ISS->>G: 系统消息: "Issue #2 已完成 ✅"
     W->>D: 容器自动销毁
 ```
 
@@ -1854,26 +1846,26 @@ sequenceDiagram
 
 | 状态 | 触发方式 | 下一状态 | 触发条件 |
 |------|---------|---------|---------|
-| `backlog` | `/backlog` 指令自动创建 | `todo` | **人工点击 [转为 todo] 按钮** |
-| `todo` | 人工从 backlog 转为 todo | `in_progress` | 系统自动调度（按优先级+排队顺序） |
-| `in_progress` | 系统自动 | `in_review` | anserAgent 检查通过 + PR 创建成功 |
+| `backlog` | `/backlog` 指令自动创建 | `todo` 子 Issue | `/todo` 分析需求后生成任务列表，子任务通过 `parent_id` 归属到 backlog |
+| `todo` | `/todo` 任务列表生成后 | `in_progress` | 系统自动调度（按优先级+排队顺序） |
+| `in_progress` | 系统自动 | `in_review` | anserAgent 检查通过 + PR 创建成功；此状态进入人工审核 |
 | `in_progress` | 系统自动 | `paused` | 人工点击 [暂停] |
-| `in_progress` | 系统自动 | `backlog` | 人工点击 [停止]（终止 anserAgent 进程，worktree 保留） |
+| `in_progress` | 系统自动 | `todo` | 点击 [停止]（终止 anserAgent 进程，worktree 保留） |
 | `paused` | 人工暂停 | `in_progress` | 人工点击 [恢复]（SIGCONT 恢复 anserAgent 进程） |
-| `paused` | 人工暂停 | `backlog` | 人工点击 [停止]（终止 anserAgent 进程，worktree 保留） |
-| `in_progress` | 系统自动 / 人工恢复 | `todo` | anserAgent 检查失败 → 保留 worktree → 等待人工提示词 |
+| `paused` | 人工暂停 | `todo` | 点击 [停止]（终止 anserAgent 进程，worktree 保留） |
+| `in_progress` | 系统自动 / 人工恢复 | `todo` | anserAgent 检查失败 → 保留 worktree → 等待重新调度 |
 | `in_review` | anserAgent 检查通过后 | `done` | GitHub Webhook 通知 PR 已 merge → git worktree remove |
-| `in_review` | anserAgent 检查通过后 | `todo` | PR 被拒绝 → 人工追加提示词 → Eino 优化 → 复用 worktree 重新执行 |
+| `in_review` | 人工审核 | `todo` | PR 被拒绝或要求修改 → 保留 worktree → 复用上下文重新执行 |
 
-**人工提示词介入机制**：
+**补充指令介入机制**：
 
-Issue 的时间线面板允许自然人在任意阶段追加提示词，直接干预 anserAgent 的下一步执行：
+Issue 的时间线面板允许自然人在 `todo` / `in_progress` / `paused` 阶段追加补充指令，干预 anserAgent 的下一步执行；`in_review` 阶段只处理 PR 审核动作。
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  Issue 时间线                                            │
 │  ┌───────────────────────────────────────────────────┐  │
-│  │ 12:00  system   状态变更: backlog → todo           │  │
+│  │ 12:00  system   从需求 #1 分析出任务 #2              │  │
 │  │ 12:01  system   状态变更: todo → in_progress       │  │
 │  │ 12:02  agent    开始编码: 正在读取 Issue 描述...    │  │
 │  │ 12:05  agent    生成文件: src/login.tsx             │  │
@@ -1881,7 +1873,7 @@ Issue 的时间线面板允许自然人在任意阶段追加提示词，直接�
 │  │ ─────────────────────────────────────────────      │  │
 │  │ 12:09  张三     提示词: "login.tsx 的密码框需要     │  │
 │  │                 autocomplete='new-password'"        │  │
-│  │ 12:09  system   收到人工提示词，重新执行 anserflow    │  │
+│  │ 12:09  system   收到补充指令，重新执行 anserflow      │  │
 │  │ 12:12  agent    修复完成: lint + test 全部通过      │  │
 │  └───────────────────────────────────────────────────┘  │
 │                                                         │
@@ -1894,10 +1886,10 @@ Issue 的时间线面板允许自然人在任意阶段追加提示词，直接�
 **实现**：
 
 - `POST /api/orgs/:org_id/projects/:project_id/issues/:issue_id/prompt` → 写入 `issue_timeline`（event_type=human_prompt）
-- Issue 服务收到人工提示词后调用 `prompt_optimizer.Enhance()`（Eino 优化改写）
-- 优化后的提示词写入时间线，触发 Issue 重新进入 in_progress
+- Issue 服务收到补充指令后调用 `prompt_optimizer.Enhance()`（Eino 优化改写）
+- 优化后的指令写入时间线，触发 Issue 重新进入 in_progress
 - Worker 检测到已有 worktree（`project_id → 容器 → /workspace/issue-{id}`），在 worktree 内继续执行
-- anserflow 基于上次工作区状态 + 优化提示词继续编码
+- anserflow 基于上次工作区状态 + 优化指令继续编码
 - Issue done 后清理 worktree（`git worktree remove`），容器常驻不销毁
 - anserflow 重新执行时保留之前的 `issue_timeline` 日志记录
 

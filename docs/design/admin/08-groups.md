@@ -159,14 +159,14 @@ Agent 消息中的结构化成果自动渲染为对应类型的 AgentOutputCard�
 - DiffViewer 同样共享，支持暗色/亮色主题
 - 所有卡片为**只读模式**（Admin 端无重试、无确认操作，仅展示）
 
-### 方案确认卡片 (backlog_ack)
+### PR 审核卡片 (review_decision)
 
-Admin 端群组消息列表中也渲染交互式确认卡片（与 Client 端共享同一组件），允许管理员直接在群组消息流中确认或拒绝 Agent 生成的 Issue 方案。
+Admin 端群组消息列表中也渲染交互式 PR 审核卡片（与 Client 端共享同一组件）。该卡片仅在 Issue 进入 `in_review` 时出现。
 
 **交互能力**:
-- [确认转 Todo] — 调用 `backlog_ack` WebSocket 消息 → Issue 状态变为 `todo`
-- [拒绝] — Issue 保留在 `backlog`
-- 确认后卡片变为只读态
+- [审核通过] — 调用 `review_decision` WebSocket 消息 → 等待 PR merge 后 Issue 变为 `done`
+- [退回修改] — Issue 回到 `todo`，保留 PR 与执行上下文
+- 决策后卡片变为只读态
 
 **权限**: 所有有 Issue 管理权限的成员 (owner/admin) 均可操作。
 

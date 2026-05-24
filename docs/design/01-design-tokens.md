@@ -101,14 +101,16 @@
 
 ### 1.3 Issue 状态色
 
+Issue 状态语义统一如下：`backlog` 表示原始需求；`todo` 表示从某个 backlog 需求分析出的任务列表，任务通过 `parent_id` 归属到同一个 backlog Issue 下；`in_progress` 表示正在运行的任务；`in_review` 表示需要人工审核，此时创建/查看 PR；`done` 表示 PR 已完成并合并。除 `in_review` 外，其余状态不设计人工确认关卡。
+
 | 状态 | 颜色 | Tailwind Class | CSS 变量 |
 |------|------|----------------|----------|
-| `backlog` | Slate 灰 | `bg-slate-100 text-slate-700` | `--status-backlog` |
-| `todo` | Blue 蓝 | `bg-blue-100 text-blue-700` | `--status-todo` |
+| `backlog`（需求） | Slate 灰 | `bg-slate-100 text-slate-700` | `--status-backlog` |
+| `todo`（任务列表） | Blue 蓝 | `bg-blue-100 text-blue-700` | `--status-todo` |
 | `in_progress` | Amber 琥珀 | `bg-amber-100 text-amber-700` | `--status-in-progress` |
 | `paused` | Orange 橙 | `bg-orange-100 text-orange-700` | `--status-paused` |
-| `in_review` | Purple 紫 | `bg-purple-100 text-purple-700` | `--status-in-review` |
-| `done` | Green 绿 | `bg-green-100 text-green-700` | `--status-done` |
+| `in_review`（审核中/PR） | Purple 紫 | `bg-purple-100 text-purple-700` | `--status-in-review` |
+| `done`（已完成） | Green 绿 | `bg-green-100 text-green-700` | `--status-done` |
 
 ### 1.4 优先级颜色
 

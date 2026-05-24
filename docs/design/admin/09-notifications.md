@@ -59,8 +59,8 @@
 |------|----------|
 | 全部 | 无筛选 |
 | 未读 | `is_read=false` |
-| 待确认 | `type=plan_generated` 且未确认 |
-| Issue | `type` 包含 `issue` 或 `plan_generated` |
+| 待审核 | `type=issue_review_required` 或 `issue.status=in_review` |
+| Issue | `type` 包含 `issue` |
 | Agent | `type` 包含 `agent` |
 | 邀请 | `type=invite` |
 | 提及 | `type=mention` |
@@ -78,7 +78,7 @@
 |----------|----------|------|
 | `issue_assigned` | `/admin/projects/:project_id` (Issues Tab, 选中该 Issue) | 展开详情面板 |
 | `issue_status_changed` | `/admin/projects/:project_id` (Issues Tab, 选中该 Issue) | 展开详情面板 |
-| `plan_generated` | `/admin/groups/:group_id` (消息记录 Tab) | 滚动到确认卡片位置 |
+| `issue_review_required` | `/admin/groups/:group_id` (消息记录 Tab) | 滚动到 PR 审核卡片位置 |
 | `agent_completed` | `/admin/projects/:project_id` (Issues Tab, 选中该 Issue) | 展开时间线 |
 | `agent_failed` | `/admin/projects/:project_id` (Issues Tab, 选中该 Issue) | 展开时间线 |
 | `mention` | `/admin/groups/:group_id` (消息记录 Tab) | 滚动到 @提及消息位置 |
@@ -115,7 +115,7 @@
 ┌──────────────────────────────────┐
 │ 通知 (4 条未读)       [全部已读] │
 │ ──────────────────────────────── │
-│ ● 📋 CTO 生成了方案 #42，待确认 │
+│ ● 🔀 Issue #42 PR 待审核        │
 │   2 分钟前                       │
 │ ──────────────────────────────── │
 │ ● 🤖 前端Agent 完成 Issue #42   │
@@ -161,10 +161,10 @@ toast.success("Agent 完成了任务", {
   duration: 5000,
 });
 
-// 方案待确认通知
-toast.info("方案待确认", {
-  description: "CTO 在讨论中生成了方案 #42: 修复登录页面验证逻辑",
-  action: { label: "去确认", onClick: () => navigate("/admin/groups/5") },
+// PR 待审核通知
+toast.info("PR 待审核", {
+  description: "Issue #42 已进入审核中，请查看 PR",
+  action: { label: "去审核", onClick: () => navigate("/admin/groups/5") },
   duration: 0, // 不自动关闭，直到用户操作
 });
 

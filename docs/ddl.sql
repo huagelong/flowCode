@@ -184,6 +184,7 @@ CREATE TABLE issues (
     FOREIGN KEY (parent_id) REFERENCES issues(id),
     FOREIGN KEY (created_by) REFERENCES users(id),
     INDEX idx_project_status_created (project_id, status, created_at),
+    INDEX idx_parent_status (parent_id, status),
     INDEX idx_assignee_status (created_by, status)
 );
 
@@ -283,32 +284,6 @@ CREATE TABLE invitation_usages (
     used_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (invitation_id) REFERENCES invitations(id),
     FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
-CREATE TABLE todos (
-    id BIGINT PRIMARY KEY AUTO_INCREMENT,
-    project_id BIGINT NOT NULL,
-    parent_id BIGINT NULL,
-    title VARCHAR(256) NOT NULL,
-    description TEXT,
-    status ENUM('todo','in_progress','done','blocked') DEFAULT 'todo',
-    priority ENUM('p0','p1','p2','p3','p4') DEFAULT 'p2',
-    assigned_agent_id BIGINT NULL,
-    assigned_user_id BIGINT NULL,
-    estimated_hours DECIMAL(5,1),
-    depends_on JSON NULL,
-    acceptance_criteria TEXT,
-    source ENUM('manual','agent_breakdown','import') DEFAULT 'manual',
-    linked_issue_id BIGINT NULL,
-    created_by BIGINT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (project_id) REFERENCES projects(id),
-    FOREIGN KEY (parent_id) REFERENCES todos(id),
-    FOREIGN KEY (assigned_agent_id) REFERENCES agents(id),
-    FOREIGN KEY (assigned_user_id) REFERENCES users(id),
-    FOREIGN KEY (linked_issue_id) REFERENCES issues(id),
-    FOREIGN KEY (created_by) REFERENCES users(id)
 );
 
 -- ============================================================================

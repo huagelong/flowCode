@@ -16,7 +16,7 @@
 12:05 🤖 📄 Generated file: src/login.tsx
 12:02 🤖 📝 Starting: 读取 Issue 描述...
 12:01 📦 状态变更: todo → 进行中
-12:00 📦 状态变更: backlog → todo
+12:00 📦 从需求分析出任务列表
 ```
 
 ### 1.2 事件行样式
@@ -182,28 +182,28 @@
 | paused | 恢复 | `Play` | `variant="default"` |
 | paused | 停止 | `Square` | `variant="destructive"` |
 | in_review | 查看 PR | `ExternalLink` | `variant="outline"` |
+| in_review | 审核通过 | `CheckCircle2` | `variant="default"` |
+| in_review | 退回修改 | `RotateCcw` | `variant="outline"` |
 | done | 查看 PR | `ExternalLink` | `variant="outline"` |
 
 按钮大小：`h-8 text-xs`（紧凑版）
 
-### 停止执行确认
+`in_review` 是唯一需要人工确认的状态；`backlog` 表示需求，`todo` 表示同一需求下分析出的任务列表。
 
-点击 [⏹ 停止] 时弹出底部 Sheet 确认（适配移动端）：
+### 停止执行
+
+点击 [⏹ 停止] 时直接停止当前运行并回到 `todo`：
 
 ```
 ┌──────────────────────────────────────────┐
-│ ⚠️ 停止执行                              │
+│ 执行已停止                              │
 │                                          │
-│ 确定要停止此任务的执行吗？               │
-│ Agent 正在执行的任务将被终止。           │
+│ Issue 已回到任务列表。                   │
 │ 已生成的文件和提交不受影响。             │
-│                                          │
-│                    [取消]  [确认停止]     │
 └──────────────────────────────────────────┘
 ```
 
-- 使用 AlertDialog（桌面）/ Bottom Sheet（移动端）
-- 确认按钮：`variant="destructive" size="sm"`
+- 使用 Toast / Inline Banner
 - 停止后 Issue 状态变为 `todo`
 
 ---

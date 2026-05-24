@@ -378,9 +378,9 @@ package prompts
 
 func init() {
 
-    defaultManager.prompts["system.issue.backlog_created"] = `已生成 Issue #%d（backlog），请到 backlog Tab 确认细节并启动`
+    defaultManager.prompts["system.issue.backlog_created"] = `已生成需求 Issue #%d（backlog）`
 
-    defaultManager.prompts["system.issue.to_todo"] = `Issue #%d 已确认转为 todo，排队等待执行`
+    defaultManager.prompts["system.issue.todo_created"] = `已为需求 Issue #%d 生成任务列表`
 
     defaultManager.prompts["system.issue.start"] = `Issue #%d 开始执行，Agent 已启动`
 
@@ -486,7 +486,7 @@ Issue 状态流转逻辑分散在 `IssueService`、`Worker`、`Scheduler`、`Web
 
 |------|----|--------|--------|
 
-| `backlog` | `todo` | 人工确认 | 群聊通知 + 时间线 |
+| `backlog` | `todo` 子 Issue | /todo 分析任务 | 群聊通知 + 时间线 |
 
 | `todo` | `in_progress` | Scheduler 分配 | 群聊通知 + 时间线 + 通知被分配人 |
 
@@ -500,7 +500,6 @@ Issue 状态流转逻辑分散在 `IssueService`、`Worker`、`Scheduler`、`Web
 
 | `in_review` | `todo` | PR 被拒绝/关闭未合并 | 群聊通知 + 时间线（worktree 保留待重试） |
 
-| `todo` | `backlog` | 人工退回 | 时间线 |
 
 **实现**：
 
@@ -550,11 +549,10 @@ func NewStatusManager() *StatusManager {
 
     // 注册合法流转
 
-    m.allow("backlog", "todo")
+    m.allow("backlog", "todo") // 仅用于生成 parent_id 指向 backlog 的 todo 子 Issue
 
     m.allow("todo", "in_progress")
 
-    m.allow("todo", "backlog")
 
     m.allow("in_progress", "in_review")
 
@@ -650,7 +648,7 @@ statusMgr.OnTransition("backlog", "todo",
 
             msgService.SendSystemMessage(ctx, issue.SourceGroupID,
 
-                prompts.Get("system.issue.to_todo", issueID))
+                prompts.Get("system.issue.todo_created", issueID))
 
         }
 
@@ -1146,11 +1144,11 @@ func (h *CommandHandler) HandleBacklog(msg *ws.Message, initialStatus string) {
 
 | Agent 参与 | ✅ anserAgent 编排产出方案 | ✅ anserAgent 编排产出方案 |
 
-| Issue 状态 | `backlog` | `todo`（跳过 backlog） |
+| Issue 状态 | 创建需求 Issue（`backlog`） | 基于 backlog 创建子任务 Issue（`todo`） |
 
-| 人工确认 | 需确认后转为 todo | 无需确认，直接可执行 |
+| 人工确认 | 无需确认 | 无需确认，直接可执行 |
 
-| 适用场景 | 需求模糊，需讨论出方案后再审 | 需求明确，希望快速推进到执行 |
+| 适用场景 | 记录原始需求与讨论上下文 | 从需求分析出可执行任务列表 |
 
 ### `/new` 指令 — 会话上下文隔离
 

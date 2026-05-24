@@ -151,52 +151,52 @@ Agent 在执行过程中产生的代码改动、提交、PR、测试结果等，
 | 样式 | `text-xs text-muted-foreground italic bg-muted/50 rounded-full px-4 py-1` |
 | 分隔线 | 左右各 `border-t border-border flex-1` |
 
-**注意**: Agent 生成的 Issue 方案不使用系统消息，而是使用下方的「确认卡片」交互组件。
+**注意**: Agent 生成的需求和任务列表使用普通 Issue 卡片展示，不在 `backlog` 或 `todo` 阶段要求人工确认。唯一需要人工确认的是 `in_review` 状态的 PR 审核卡片。
 
-#### Backlog 确认卡片 (backlog_ack)
+#### PR 审核卡片 (review_decision)
 
-当 Agent 在讨论中识别到可执行的需求时，自动生成 Issue 方案卡片，需人工确认：
+当 Agent 完成任务并进入 `in_review` 时，聊天中展示 PR 审核卡片：
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│ 📋 方案已生成                                            │
+│ 🔀 PR 待审核                                             │
 │                                                          │
 │ #42 修复登录页面验证逻辑                                  │
-│ P1 · 建议分配: 🤖 前端Agent                              │
+│ P1 · 🤖 前端Agent · in_review                            │
 │                                                          │
-│ 密码强度校验规则需要更新，当前前端未做复杂度检查...       │
+│ PR #15: feat/login-validation                            │
+│ https://github.com/org/repo/pull/15                      │
 │                                                          │
-│                                    [✗ 拒绝]  [✓ 确认转 Todo] │
+│                              [退回修改] [审核通过] [查看变更] │
 └──────────────────────────────────────────────────────────┘
 ```
 
 | 属性 | 值 |
 |------|------|
 | 背景 | `bg-card border rounded-lg shadow-sm` |
-| 图标 | `ClipboardList h-4 w-4 text-primary` |
-| 标题 | "方案已生成" `text-sm font-medium` |
+| 图标 | `GitPullRequest h-4 w-4 text-purple-600` |
+| 标题 | "PR 待审核" `text-sm font-medium` |
 | Issue 标题 | `text-sm font-medium` |
 | 优先级 + 分配 | `text-xs text-muted-foreground` |
-| 描述 | `text-xs text-muted-foreground line-clamp-3` |
-| 确认按钮 | `variant="default" size="sm"`，发送 `backlog_ack` WebSocket 消息 |
-| 拒绝按钮 | `variant="ghost" size="sm" text-destructive` |
+| PR 信息 | `text-xs text-muted-foreground line-clamp-2` |
+| 审核通过按钮 | `variant="default" size="sm"`，发送 `review_decision` WebSocket 消息 |
+| 退回修改按钮 | `variant="outline" size="sm"` |
+| 查看变更按钮 | `variant="ghost" size="sm"`，打开 `pr_url` |
 
 **交互流程**:
-1. Agent 在讨论中识别到需求 → 自动生成 Issue 方案 → 聊天中显示确认卡片
-2. 用户点击"确认转 Todo" → `backlog_ack { accepted: true }` → Issue 状态变为 `todo` → 卡片更新为"已确认 ✓"
-3. 用户点击"拒绝" → `backlog_ack { accepted: false }` → Issue 保留在 `backlog` 供后续参考，卡片更新为"已拒绝 ✗"
-4. 确认后卡片变为只读态：`bg-muted/50`，按钮替换为状态文字
+1. Agent 执行通过 → 创建 PR → Issue 状态变为 `in_review`
+2. 用户点击"审核通过" → `review_decision { decision: "approved" }` → 等待 GitHub merged webhook 后进入 `done`
+3. 用户点击"退回修改" → `review_decision { decision: "changes_requested" }` → Issue 回到 `todo`，保留 PR 和执行上下文
+4. 决策后卡片变为只读态：`bg-muted/50`，按钮替换为状态文字
 
 **卡片状态变化**:
 
 | 阶段 | 背景 | 按钮/文字 |
 |------|------|----------|
-| 待确认 | `bg-card border` | [✗ 拒绝] [✓ 确认转 Todo] |
-| 已确认 | `bg-green-50/50 border-green-200` | "✓ 已确认，Issue 已加入执行队列" |
-| 已拒绝 | `bg-muted/50` | "✗ 已拒绝" + [重新考虑] 链接 |
-| 加载中 (点击后) | 同待确认 | 按钮 Spinner + "处理中..." |
-
-**重新考虑**: 拒绝后显示"重新考虑"链接，点击可重新打开确认按钮。
+| 待审核 | `bg-card border` | [退回修改] [审核通过] [查看变更] |
+| 已通过 | `bg-green-50/50 border-green-200` | "✓ 已通过，等待 PR 合并" |
+| 已退回 | `bg-amber-50/50 border-amber-200` | "已退回任务列表" |
+| 加载中 (点击后) | 同待审核 | 按钮 Spinner + "处理中..." |
 
 #### 任务创建卡片
 
@@ -221,7 +221,7 @@ Agent 在执行过程中产生的代码改动、提交、PR、测试结果等，
 | Issue 信息 | `text-xs text-muted-foreground` |
 | 查看链接 | `text-xs text-primary hover:underline`，点击打开上下文面板 Issue 详情 |
 
-**与方案确认卡片的区别**: 无需确认按钮，Issue 直接进入 `todo` 状态，样式为绿色成功态。
+**与 PR 审核卡片的区别**: 任务创建卡片无需确认按钮，Issue 直接进入 `todo` 状态，样式为绿色成功态。
 
 #### 会话上下文重置标记
 
