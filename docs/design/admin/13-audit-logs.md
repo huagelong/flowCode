@@ -136,7 +136,12 @@
 
 - `detail` JSON 使用 JSON 格式化展示
 - 等宽字体 `font-mono text-sm`
-- 暗色背景代码块
+- 暗色背景代码块 `bg-zinc-900 text-zinc-100 rounded-lg p-3`
+- 语法高亮（JSON keys 蓝色，字符串值绿色，数字橙色）
+- 自动缩进 2 空格
+- 最大高度 `max-h-[300px] overflow-y-auto`
+- 右上角 [📋 复制] 按钮（复制格式化 JSON）
+- 嵌套对象默认折叠，点击 `▶` 展开
 
 ---
 
@@ -146,6 +151,11 @@
 - 列：时间, 操作者, 操作, 资源类型, 资源ID, IP, 详情
 - 文件名：`audit-logs-{org_name}-{date}.csv`
 - 最多导出 10000 条
+- 超过 10000 条时 Toast 提示 "当前筛选结果超过 10000 条，仅导出前 10000 条"
+- CSV 格式：UTF-8 with BOM（兼容 Excel 中文）
+- 日期格式：`YYYY-MM-DD HH:mm:ss`
+- 详情列：JSON 压缩为单行字符串
+- 分隔符：逗号，文本字段用双引号包裹
 
 ---
 
